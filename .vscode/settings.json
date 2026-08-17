@@ -1,0 +1,3 @@
+{
+    "rust-analyzer.check.command": "clippy", // I like clippy's lints, I think that it enhances my code quality
+}
