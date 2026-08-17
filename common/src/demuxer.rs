@@ -21,4 +21,10 @@ pub trait Demuxer {
 
 /// An error type for demuxing operations
 #[derive(Debug, thiserror::Error)]
-pub enum DemuxingError {}
+pub enum DemuxingError {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("Encountered invalid data: {0}")]
+    InvalidData(String),
+}

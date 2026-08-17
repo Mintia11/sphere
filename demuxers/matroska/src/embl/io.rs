@@ -11,10 +11,7 @@ pub trait EBMLRead: ByteRead {
         let first = self.le_u8()?;
         let length = (first.leading_zeros() + 1) as usize;
         if length > 4 {
-            return Err(Error::InvalidData(format!(
-                "Invalid EBML ID length: got {} expected 1-4",
-                length
-            )));
+            return Err(Error::InvalidIDLenght(length));
         }
         let mut buf = [0u8; 4];
         buf[4 - length] = first;
@@ -27,10 +24,7 @@ pub trait EBMLRead: ByteRead {
         let first = self.le_u8()?;
         let length = (first.leading_zeros() + 1) as usize;
         if length > 8 {
-            return Err(Error::InvalidData(format!(
-                "Invalid EBML VINT length: got {} expected 1-8",
-                length
-            )));
+            return Err(Error::InvalidVINTLenght(length));
         }
         let mask = 0xFFu8.unbounded_shr(length as u32);
         let mut buf = [0u8; 8];
@@ -42,10 +36,7 @@ pub trait EBMLRead: ByteRead {
     /// Reads an unsigned integer of the specified size from the byte stream.
     fn uinteger(&mut self, size: usize) -> Result<u64, Error> {
         if size > 8 {
-            return Err(Error::InvalidData(format!(
-                "uinteger wider than 8 bytes: got {}",
-                size
-            )));
+            return Err(Error::InvalidIntegerLenght(size));
         }
         let mut buf = [0u8; 8];
         self.read_exact(&mut buf[8 - size..8])?;
@@ -55,10 +46,7 @@ pub trait EBMLRead: ByteRead {
     /// Reads a signed integer of the specified size from the byte stream.
     fn integer(&mut self, size: usize) -> Result<i64, Error> {
         if size > 8 {
-            return Err(Error::InvalidData(format!(
-                "integer wider than 8 bytes: got {}",
-                size
-            )));
+            return Err(Error::InvalidIntegerLenght(size));
         }
         let mut buf = [0u8; 8];
         self.read_exact(&mut buf[8 - size..8])?;
@@ -152,6 +140,15 @@ pub enum Error {
 
     #[error("Invalid data encountered: {0}")]
     InvalidData(String),
+
+    #[error("Invalid EBML ID length: got {0} expected 1-4")]
+    InvalidIDLenght(usize),
+
+    #[error("Invalid EBML VINT length: got {0} expected 1-8")]
+    InvalidVINTLenght(usize),
+
+    #[error("integer wider than 8 bytes: got {0}")]
+    InvalidIntegerLenght(usize),
 
     #[error("Encountered error while decoding UTF-8 string: {0}")]
     FromUTF8(#[from] std::string::FromUtf8Error),
