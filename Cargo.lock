@@ -51,6 +51,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sphere"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "matroska",
+]
+
+[[package]]
 name = "syn"
 version = "3.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
