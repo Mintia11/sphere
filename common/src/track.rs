@@ -1,5 +1,7 @@
 //! Track-related types
 
+use bytes::Bytes;
+
 use crate::time::TimeBase;
 
 /// A unique identifier for a track.
@@ -17,7 +19,7 @@ pub struct TrackInfo {
     /// The timebase associated with the track, used for timestamp calculations.
     pub timebase: TimeBase,
     /// Optional extra data associated with the track, such as codec-specific initialization data.
-    pub extra_data: Option<Box<[u8]>>,
+    pub extra_data: Option<Bytes>,
     /// The bitstream format of the track, indicating how the encoded data is structured.
     pub bitstream_format: BitstreamFormat,
 }
