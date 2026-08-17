@@ -17,12 +17,9 @@ impl<T: EBMLRead + Seek> EBMLMasterElement<T> for Tracks {
     const ID: u32 = 0x1654AE6B;
 
     fn visit_child(&mut self, sub_element: EBMLElement, reader: &mut T) -> Result<(), Error> {
-        match sub_element.id {
-            <Track as EBMLMasterElement<T>>::ID => {
-                let track = reader.master_element::<Track>(Some(sub_element))?;
-                self.tracks.push(track);
-            }
-            _ => {}
+        if sub_element.id == <Track as EBMLMasterElement<T>>::ID {
+            let track = reader.master_element::<Track>(Some(sub_element))?;
+            self.tracks.push(track);
         }
 
         Ok(())

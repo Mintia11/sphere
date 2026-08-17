@@ -1,6 +1,6 @@
 use std::io::{Seek, SeekFrom};
 
-use common::byte_io::ByteRead;
+use common::{byte_io::ByteRead, demuxer::DemuxingError};
 
 use crate::embl::{EBMLElement, EBMLMasterElement};
 
@@ -152,4 +152,14 @@ pub enum Error {
 
     #[error("Encountered error while decoding UTF-8 string: {0}")]
     FromUTF8(#[from] std::string::FromUtf8Error),
+}
+
+impl From<Error> for DemuxingError {
+    fn from(e: Error) -> Self {
+        match e {
+            Error::Io(e) => DemuxingError::Io(e),
+            Error::InvalidData(e) => DemuxingError::InvalidData(e),
+            _ => DemuxingError::InvalidData(e.to_string()),
+        }
+    }
 }

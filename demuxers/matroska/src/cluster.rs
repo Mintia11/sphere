@@ -114,10 +114,7 @@ impl Block {
                 let is_keyframe = flags & 0x80 != 0;
                 let is_disposable = flags & 0x1 != 0;
 
-                let data = element.data(reader).map_err(|e| match e {
-                    Error::Io(e) => DemuxingError::Io(e),
-                    _ => unreachable!("shouldn't get any other error other than I/O"),
-                })?;
+                let data = element.data(reader)?;
 
                 let packet = Packet {
                     track: track_number as TrackId,
