@@ -27,6 +27,7 @@ dependencies = [
 name = "matroska"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "common",
  "thiserror",
 ]
