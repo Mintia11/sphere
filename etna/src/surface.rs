@@ -44,16 +44,6 @@ impl Surface {
         }
     }
 
-    pub fn present_modes(
-        &self,
-        physical_device: vk::PhysicalDevice,
-    ) -> Result<Vec<vk::PresentModeKHR>, vk::Result> {
-        unsafe {
-            self.ext
-                .get_physical_device_surface_present_modes(physical_device, self.surface)
-        }
-    }
-
     pub fn capabilities(
         &self,
         physical_device: vk::PhysicalDevice,
@@ -61,6 +51,16 @@ impl Surface {
         unsafe {
             self.ext
                 .get_physical_device_surface_capabilities(physical_device, self.surface)
+        }
+    }
+
+    pub fn present_modes(
+        &self,
+        physical_device: vk::PhysicalDevice,
+    ) -> Result<Vec<vk::PresentModeKHR>, vk::Result> {
+        unsafe {
+            self.ext
+                .get_physical_device_surface_present_modes(physical_device, self.surface)
         }
     }
 }

@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use ash::{khr, vk};
 
-use crate::{error::Error, image::Image, instance::Instance, surface::Surface};
+use crate::{device::Device, error::Error, image::Image, instance::Instance, surface::Surface};
 
 pub struct Swapchain {
     ext: khr::swapchain::Device,
-    device: Arc<ash::Device>,
+    device: Arc<Device>,
     surface: Arc<Surface>,
     physical_device: vk::PhysicalDevice,
 
@@ -23,7 +23,7 @@ pub struct Swapchain {
 
 pub struct SwapchainCreateInfo<'a> {
     pub instance: &'a Instance,
-    pub device: Arc<ash::Device>,
+    pub device: Arc<Device>,
     pub surface: Arc<Surface>,
     pub physical_device: vk::PhysicalDevice,
     pub preferred_format: vk::Format,
@@ -34,7 +34,7 @@ pub struct SwapchainCreateInfo<'a> {
 impl Swapchain {
     pub fn new(info: SwapchainCreateInfo<'_>) -> Result<Self, Error> {
         let mut this = Self {
-            ext: khr::swapchain::Device::new(info.instance.handle(), &info.device),
+            ext: khr::swapchain::Device::new(info.instance.handle(), info.device.handle()),
             device: info.device,
             surface: info.surface,
             physical_device: info.physical_device,
@@ -184,7 +184,11 @@ impl Swapchain {
                     )
                     .view_type(vk::ImageViewType::TYPE_2D);
 
-                let view = unsafe { self.device.create_image_view(&image_view_info, None)? };
+                let view = unsafe {
+                    self.device
+                        .handle()
+                        .create_image_view(&image_view_info, None)?
+                };
 
                 Ok(Arc::new(Image::from_parts_without_allocation(
                     image,
