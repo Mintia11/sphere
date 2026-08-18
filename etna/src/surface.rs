@@ -1,7 +1,7 @@
 use ash::{khr, vk};
 use raw_window_handle::RawWindowHandle;
 
-use crate::error::Error;
+use crate::{error::Error, instance::Instance};
 
 pub struct Surface {
     surface: vk::SurfaceKHR,
@@ -9,14 +9,11 @@ pub struct Surface {
 }
 
 impl Surface {
-    pub fn new(
-        entry: &ash::Entry,
-        instance: &ash::Instance,
-        raw_window_handle: RawWindowHandle,
-    ) -> Result<Self, Error> {
+    pub fn new(instance: &Instance, raw_window_handle: RawWindowHandle) -> Result<Self, Error> {
         let surface = match raw_window_handle {
             RawWindowHandle::Win32(win32) => {
-                let os_extension = khr::win32_surface::Instance::new(entry, instance);
+                let os_extension =
+                    khr::win32_surface::Instance::new(instance.entry(), instance.handle());
 
                 let create_info = vk::Win32SurfaceCreateInfoKHR::default()
                     .hwnd(win32.hwnd.get())
@@ -29,7 +26,7 @@ impl Surface {
 
         Ok(Surface {
             surface,
-            ext: khr::surface::Instance::new(entry, instance),
+            ext: khr::surface::Instance::new(instance.entry(), instance.handle()),
         })
     }
 

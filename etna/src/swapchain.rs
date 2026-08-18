@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ash::{khr, vk};
 
-use crate::{error::Error, image::Image, surface::Surface};
+use crate::{error::Error, image::Image, instance::Instance, surface::Surface};
 
 pub struct Swapchain {
     ext: khr::swapchain::Device,
@@ -21,8 +21,8 @@ pub struct Swapchain {
     preferred_present_mode: vk::PresentModeKHR,
 }
 
-pub struct SwapchainCreateInfo {
-    pub instance: Arc<ash::Instance>,
+pub struct SwapchainCreateInfo<'a> {
+    pub instance: &'a Instance,
     pub device: Arc<ash::Device>,
     pub surface: Arc<Surface>,
     pub physical_device: vk::PhysicalDevice,
@@ -32,9 +32,9 @@ pub struct SwapchainCreateInfo {
 }
 
 impl Swapchain {
-    pub fn new(info: SwapchainCreateInfo) -> Result<Self, Error> {
+    pub fn new(info: SwapchainCreateInfo<'_>) -> Result<Self, Error> {
         let mut this = Self {
-            ext: khr::swapchain::Device::new(&info.instance, &info.device),
+            ext: khr::swapchain::Device::new(info.instance.handle(), &info.device),
             device: info.device,
             surface: info.surface,
             physical_device: info.physical_device,
