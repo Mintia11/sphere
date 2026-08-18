@@ -1,34 +1,52 @@
-use std::fs::File;
+use etna::GPUContext;
+use winit::application::ApplicationHandler;
+use winit::event::WindowEvent;
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::raw_window_handle::HasWindowHandle;
+use winit::window::{Window, WindowId};
 
-use common::{demuxer::Demuxer, packet::PacketFlags};
-use matroska::MatroskaDemuxer;
+#[derive(Default)]
+struct App {
+    window: Option<Window>,
+    context: Option<GPUContext>,
+}
+
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        self.window = Some(
+            event_loop
+                .create_window(Window::default_attributes())
+                .unwrap(),
+        );
+
+        let window = self.window.as_ref().unwrap();
+        let handle = window.window_handle().expect("Failed to get window handle");
+        let gpu_context = GPUContext::builder()
+            .with_window_handle(handle.as_raw())
+            .build()
+            .expect("Failed to create gpu context");
+
+        self.context = Some(gpu_context);
+    }
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        match event {
+            WindowEvent::CloseRequested => {
+                println!("The close button was pressed; stopping");
+                event_loop.exit();
+            }
+            WindowEvent::RedrawRequested => {
+                self.window.as_ref().unwrap().request_redraw();
+            }
+            _ => (),
+        }
+    }
+}
 
 fn main() {
-    let mut args = std::env::args();
-    let file = args.nth(1).expect("usage: sphere <file>");
+    let event_loop = EventLoop::new().unwrap();
+    event_loop.set_control_flow(ControlFlow::Poll);
 
-    let mut file = File::open(file).expect("Failed to open file");
-    let mut demuxer =
-        MatroskaDemuxer::new(&mut file).expect("Failed to initialize matroska demuxer");
-
-    for track in demuxer.tracks() {
-        println!(
-            "Track {} - kind: {:?}, codec: {:?}",
-            track.id, track.kind, track.codec
-        );
-    }
-
-    while let Some(packet) = demuxer.read_packet().expect("Failed to read packet") {
-        println!(
-            "Packet of track {} - pts: {:1.3}, dts: {:1.3}{}",
-            packet.track,
-            packet.pts.to_seconds(),
-            packet.dts.to_seconds(),
-            if packet.flags.contains(PacketFlags::KEYFRAME) {
-                ", keyframe"
-            } else {
-                ""
-            }
-        );
-    }
+    let mut app = App::default();
+    event_loop.run_app(&mut app).expect("Failed to run app");
 }

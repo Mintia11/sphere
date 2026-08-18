@@ -1,0 +1,10 @@
+[package]
+name = "etna"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ash = "0.38.0"
+gpu-allocator = "0.28.0"
+raw-window-handle = "0.6.2"
+thiserror.workspace = true
