@@ -1,12 +1,18 @@
+use std::sync::{Arc, Mutex};
+
 use ash::khr;
 pub use ash::{self, vk};
 pub use gpu_allocator;
+use gpu_allocator::vulkan::Allocator;
 
-use crate::builder::GPUContextBuilder;
+use crate::{builder::GPUContextBuilder, error::Error};
 
 pub mod builder;
 pub mod codec;
-mod error;
+pub mod error;
+pub mod image;
+pub mod surface;
+pub mod swapchain;
 
 pub struct GPUContext {
     _entry: ash::Entry,
@@ -14,11 +20,12 @@ pub struct GPUContext {
     physical_device: vk::PhysicalDevice,
     device: ash::Device,
 
-    surface: vk::SurfaceKHR,
-    surface_ext: khr::surface::Instance,
+    allocator: Arc<Mutex<Allocator>>,
 
-    swapchain: vk::SwapchainKHR,
-    swapchain_ext: khr::swapchain::Device,
+    cmd_pool: vk::CommandPool,
+    transfer_cmd_buffer: vk::CommandBuffer,
+
+    descriptor_pool: vk::DescriptorPool,
 
     graphics_queue: (vk::Queue, u32),
     present_queue: (vk::Queue, u32),

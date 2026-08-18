@@ -1,4 +1,3 @@
-use etna::GPUContext;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
@@ -8,7 +7,6 @@ use winit::window::{Window, WindowId};
 #[derive(Default)]
 struct App {
     window: Option<Window>,
-    context: Option<GPUContext>,
 }
 
 impl ApplicationHandler for App {
@@ -21,12 +19,6 @@ impl ApplicationHandler for App {
 
         let window = self.window.as_ref().unwrap();
         let handle = window.window_handle().expect("Failed to get window handle");
-        let gpu_context = GPUContext::builder()
-            .with_window_handle(handle.as_raw())
-            .build()
-            .expect("Failed to create gpu context");
-
-        self.context = Some(gpu_context);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -36,7 +28,8 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                self.window.as_ref().unwrap().request_redraw();
+                let window = self.window.as_ref().unwrap();
+                window.request_redraw();
             }
             _ => (),
         }

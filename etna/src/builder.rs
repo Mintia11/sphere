@@ -1,7 +1,9 @@
 use std::ffi::CStr;
+use std::sync::{Arc, Mutex};
 
 use ash::khr;
 use ash::{Entry, ext, vk};
+use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
 use raw_window_handle::RawWindowHandle;
 
 use crate::{GPUContext, codec::VideoCodecExtension, error::Error};
@@ -48,9 +50,9 @@ impl GPUContextBuilder {
 
         let mut device_exts = vec![
             khr::swapchain::NAME,
-            khr::video_queue::NAME,
-            khr::video_decode_queue::NAME,
             khr::synchronization2::NAME,
+            // khr::video_queue::NAME,
+            // khr::video_decode_queue::NAME,
         ];
         for codec in &self.codecs {
             device_exts.extend(codec.device_extensions());
@@ -63,34 +65,22 @@ impl GPUContextBuilder {
         let (device, queues) =
             create_device(&instance, physical_device, &device_exts, queue_families)?;
 
-        let (swapchain, swapchain_ext) = create_swapchain(
-            &instance,
-            physical_device,
-            &device,
-            surface,
-            surface_ext.clone(),
-            SwapchainInfo {
-                old_swapchain: None,
-                preferred_format: vk::Format::R8G8B8A8_UNORM,
-                preferred_colorspace: vk::ColorSpaceKHR::SRGB_NONLINEAR,
-                preferred_present_mode: vk::PresentModeKHR::MAILBOX,
-            },
-        )?;
+        let (swapchain, swapchain_ext, swapchain_format, swapchain_images, swapchain_image_views) =
+            create_swapchain(
+                &instance,
+                physical_device,
+                &device,
+                surface,
+                surface_ext.clone(),
+                SwapchainInfo {
+                    old_swapchain: None,
+                    preferred_format: vk::Format::R8G8B8A8_UNORM,
+                    preferred_colorspace: vk::ColorSpaceKHR::SRGB_NONLINEAR,
+                    preferred_present_mode: vk::PresentModeKHR::MAILBOX,
+                },
+            )?;
 
-        Ok(GPUContext {
-            _entry: entry,
-            instance,
-            physical_device,
-            device,
-            surface,
-            surface_ext,
-            swapchain,
-            swapchain_ext,
-
-            graphics_queue: (queues.0, queue_families.0),
-            present_queue: (queues.1, queue_families.1),
-            decode_queue: (queues.2, queue_families.2),
-        })
+        todo!()
     }
 }
 
@@ -317,10 +307,22 @@ fn create_device(
             .queue_priorities(&[1.0]),
     );
 
+    let mut buffer_device_address =
+        vk::PhysicalDeviceBufferDeviceAddressFeatures::default().buffer_device_address(true);
+
+    let mut synchronization2 =
+        vk::PhysicalDeviceSynchronization2Features::default().synchronization2(true);
+
+    let mut dynamic_rendering =
+        vk::PhysicalDeviceDynamicRenderingFeatures::default().dynamic_rendering(true);
+
     let exts = device_exts.iter().map(|e| e.as_ptr()).collect::<Vec<_>>();
     let device_info = vk::DeviceCreateInfo::default()
         .queue_create_infos(&queue_infos)
-        .enabled_extension_names(&exts);
+        .enabled_extension_names(&exts)
+        .push_next(&mut dynamic_rendering)
+        .push_next(&mut synchronization2)
+        .push_next(&mut buffer_device_address);
 
     let device = unsafe { instance.create_device(physical_device, &device_info, None)? };
     let graphics_queue = unsafe { device.get_device_queue(graphics, 0) };
@@ -345,7 +347,16 @@ fn create_swapchain(
     surface: vk::SurfaceKHR,
     surface_ext: khr::surface::Instance,
     info: SwapchainInfo,
-) -> Result<(vk::SwapchainKHR, khr::swapchain::Device), Error> {
+) -> Result<
+    (
+        vk::SwapchainKHR,
+        khr::swapchain::Device,
+        vk::Format,
+        Vec<vk::Image>,
+        Vec<vk::ImageView>,
+    ),
+    Error,
+> {
     let formats =
         unsafe { surface_ext.get_physical_device_surface_formats(physical_device, surface)? };
     for format in &formats {
@@ -387,7 +398,8 @@ fn create_swapchain(
         .min_image_count(surface_capabilities.min_image_count)
         .image_array_layers(1)
         .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-        .present_mode(chosen_present_mode);
+        .present_mode(chosen_present_mode)
+        .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT);
 
     let swapchain_info = if let Some(old) = info.old_swapchain {
         swapchain_info.old_swapchain(old)
@@ -398,5 +410,41 @@ fn create_swapchain(
     let swapchain_ext = khr::swapchain::Device::new(instance, device);
     let swapchain = unsafe { swapchain_ext.create_swapchain(&swapchain_info, None)? };
 
-    Ok((swapchain, swapchain_ext))
+    let images = unsafe { swapchain_ext.get_swapchain_images(swapchain)? };
+    let image_views = images
+        .iter()
+        .cloned()
+        .map(|image| {
+            let image_view_info = vk::ImageViewCreateInfo::default()
+                .image(image)
+                .format(chosen_format.format)
+                .components(
+                    vk::ComponentMapping::default()
+                        .r(vk::ComponentSwizzle::IDENTITY)
+                        .g(vk::ComponentSwizzle::IDENTITY)
+                        .b(vk::ComponentSwizzle::IDENTITY),
+                )
+                .view_type(vk::ImageViewType::TYPE_2D)
+                .subresource_range(
+                    vk::ImageSubresourceRange::default()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .base_array_layer(0)
+                        .base_mip_level(0)
+                        .layer_count(1)
+                        .level_count(1),
+                );
+
+            let view = unsafe { device.create_image_view(&image_view_info, None)? };
+
+            Ok(view)
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+
+    Ok((
+        swapchain,
+        swapchain_ext,
+        chosen_format.format,
+        images,
+        image_views,
+    ))
 }

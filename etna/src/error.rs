@@ -10,4 +10,7 @@ pub enum Error {
 
     #[error("Could not find suitable device")]
     DeviceNotFound,
+
+    #[error("Tried to present without a valid swapchain")]
+    PresentWithoutSwapchain,
 }
