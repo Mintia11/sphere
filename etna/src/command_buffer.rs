@@ -26,6 +26,22 @@ impl Device {
             device: self.clone(),
         })
     }
+
+    pub fn allocate_transfer_command_buffer(self: &Arc<Self>) -> Result<CommandBuffer, Error> {
+        let handles = unsafe {
+            self.handle().allocate_command_buffers(
+                &vk::CommandBufferAllocateInfo::default()
+                    .command_buffer_count(1)
+                    .command_pool(self.graphics_queue().command_pool())
+                    .level(vk::CommandBufferLevel::PRIMARY),
+            )?
+        };
+
+        Ok(CommandBuffer {
+            handle: handles[0],
+            device: self.clone(),
+        })
+    }
 }
 
 impl CommandBuffer {

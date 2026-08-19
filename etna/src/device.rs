@@ -87,30 +87,47 @@ impl Device {
         &self.graphics_queue
     }
 
+    pub fn transfer_queue(&self) -> &Queue {
+        &self.graphics_queue // todo: maybe create a separate transfer queue to not clog up the graphics one
+    }
+
     pub fn submit_queue(
         &self,
         queue: &Queue,
         command_buffer: &CommandBuffer,
-        wait: &Semaphore,
-        signal: &Semaphore,
+        wait: Option<&Semaphore>,
+        signal: Option<&Semaphore>,
         fence: Option<&Fence>,
     ) -> Result<(), Error> {
         let command_buffer_info = vk::CommandBufferSubmitInfo::default()
             .command_buffer(command_buffer.handle())
             .device_mask(1);
 
-        let wait = vk::SemaphoreSubmitInfo::default()
-            .semaphore(wait.handle())
-            .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS);
-
-        let signal = vk::SemaphoreSubmitInfo::default()
-            .semaphore(signal.handle())
-            .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS);
+        let wait = wait.map(|wait| {
+            vk::SemaphoreSubmitInfo::default()
+                .semaphore(wait.handle())
+                .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
+        });
+        let signal = signal.map(|signal| {
+            vk::SemaphoreSubmitInfo::default()
+                .semaphore(signal.handle())
+                .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
+        });
 
         let submit_info = vk::SubmitInfo2::default()
-            .command_buffer_infos(std::slice::from_ref(&command_buffer_info))
-            .signal_semaphore_infos(std::slice::from_ref(&signal))
-            .wait_semaphore_infos(std::slice::from_ref(&wait));
+            .command_buffer_infos(std::slice::from_ref(&command_buffer_info));
+
+        let submit_info = if let Some(signal) = &signal {
+            submit_info.signal_semaphore_infos(std::slice::from_ref(signal))
+        } else {
+            submit_info
+        };
+
+        let submit_info = if let Some(wait) = &wait {
+            submit_info.wait_semaphore_infos(std::slice::from_ref(wait))
+        } else {
+            submit_info
+        };
 
         unsafe {
             self.handle()
