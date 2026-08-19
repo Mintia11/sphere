@@ -4,14 +4,17 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::raw_window_handle::HasWindowHandle;
 use winit::window::{Window, WindowId};
 
+use crate::gui::EguiContext;
 use crate::renderer::Renderer;
 
+mod gui;
 mod renderer;
 
 #[derive(Default)]
 struct App {
     window: Option<Window>,
     renderer: Option<Renderer>,
+    ctx: EguiContext,
 }
 
 impl ApplicationHandler for App {
@@ -29,6 +32,8 @@ impl ApplicationHandler for App {
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        self.ctx.on_window_event(&event);
+
         match event {
             WindowEvent::CloseRequested => {
                 println!("The close button was pressed; stopping");
@@ -52,4 +57,5 @@ fn main() {
 
     let mut app = App::default();
     event_loop.run_app(&mut app).expect("Failed to run app");
+    std::mem::forget(app); // leak the app's memory because the drop impl in something is broken
 }
