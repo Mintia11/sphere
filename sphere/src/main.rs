@@ -4,21 +4,28 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::raw_window_handle::HasWindowHandle;
 use winit::window::{Window, WindowId};
 
+use crate::renderer::Renderer;
+
+mod renderer;
+
 #[derive(Default)]
 struct App {
     window: Option<Window>,
+    renderer: Option<Renderer>,
 }
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         self.window = Some(
             event_loop
-                .create_window(Window::default_attributes())
+                .create_window(Window::default_attributes().with_title("Sphere Video Player"))
                 .unwrap(),
         );
 
         let window = self.window.as_ref().unwrap();
         let handle = window.window_handle().expect("Failed to get window handle");
+        self.renderer =
+            Some(Renderer::new(handle.as_raw()).expect("Failed to initialize the vulkan renderer"));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -28,6 +35,9 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
+                let renderer = self.renderer.as_mut().unwrap();
+                renderer.draw().expect("Error while drawing frame");
+
                 let window = self.window.as_ref().unwrap();
                 window.request_redraw();
             }
