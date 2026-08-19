@@ -2,7 +2,12 @@ use std::{ffi::CStr, sync::Arc};
 
 use ash::vk;
 
-use crate::{error::Error, instance::Instance};
+use crate::{
+    command_buffer::CommandBuffer,
+    error::Error,
+    instance::Instance,
+    sync::{Fence, Semaphore},
+};
 
 pub struct Device {
     physical_device: vk::PhysicalDevice,
@@ -14,6 +19,7 @@ pub struct Device {
 pub struct Queue {
     handle: vk::Queue,
     family_idx: u32,
+    command_pool: vk::CommandPool,
 }
 
 impl Device {
@@ -29,6 +35,14 @@ impl Device {
         let graphics_queue = Queue {
             handle: unsafe { device.get_device_queue(graphics_queue_family, 0) },
             family_idx: graphics_queue_family,
+            command_pool: unsafe {
+                device.create_command_pool(
+                    &vk::CommandPoolCreateInfo::default()
+                        .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+                        .queue_family_index(graphics_queue_family),
+                    None,
+                )?
+            },
         };
 
         Ok(Arc::new(Device {
@@ -49,11 +63,51 @@ impl Device {
     pub fn graphics_queue(&self) -> &Queue {
         &self.graphics_queue
     }
+
+    pub fn submit_queue(
+        &self,
+        queue: &Queue,
+        command_buffer: &CommandBuffer,
+        wait: &Semaphore,
+        signal: &Semaphore,
+        fence: Option<&Fence>,
+    ) -> Result<(), Error> {
+        let command_buffer_info = vk::CommandBufferSubmitInfo::default()
+            .command_buffer(command_buffer.handle())
+            .device_mask(1);
+
+        let wait = vk::SemaphoreSubmitInfo::default()
+            .semaphore(wait.handle())
+            .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS);
+
+        let signal = vk::SemaphoreSubmitInfo::default()
+            .semaphore(signal.handle())
+            .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS);
+
+        let submit_info = vk::SubmitInfo2::default()
+            .command_buffer_infos(std::slice::from_ref(&command_buffer_info))
+            .signal_semaphore_infos(std::slice::from_ref(&signal))
+            .wait_semaphore_infos(std::slice::from_ref(&wait));
+
+        unsafe {
+            self.handle()
+                .queue_submit2(
+                    queue.handle(),
+                    &[submit_info],
+                    fence.map(Fence::handle).unwrap_or(vk::Fence::null()),
+                )
+                .map_err(Into::into)
+        }
+    }
 }
 
 impl Queue {
     pub fn handle(&self) -> vk::Queue {
         self.handle
+    }
+
+    pub fn command_pool(&self) -> vk::CommandPool {
+        self.command_pool
     }
 }
 

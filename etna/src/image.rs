@@ -27,6 +27,10 @@ impl Image {
             allocation: None,
         }
     }
+
+    pub fn handle(&self) -> vk::Image {
+        self.image
+    }
 }
 
 impl Drop for Image {

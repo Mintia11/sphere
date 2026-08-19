@@ -70,6 +70,7 @@ impl Swapchain {
         }
 
         let acquire_info = vk::AcquireNextImageInfoKHR::default()
+            .device_mask(1)
             .swapchain(self.swapchain.unwrap())
             .timeout(timeout);
 
