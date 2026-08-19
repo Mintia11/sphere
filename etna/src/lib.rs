@@ -10,6 +10,7 @@ pub mod device;
 pub mod error;
 pub mod image;
 pub mod instance;
+pub mod shader;
 pub mod surface;
 pub mod swapchain;
 pub mod sync;
