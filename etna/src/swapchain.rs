@@ -219,6 +219,10 @@ impl Swapchain {
                 Ok(Arc::new(Image::from_parts_without_allocation(
                     image,
                     view,
+                    vk::Extent3D::default()
+                        .width(surface_capabilities.current_extent.width)
+                        .height(surface_capabilities.current_extent.height)
+                        .depth(1),
                     self.device.clone(),
                 )))
             })
