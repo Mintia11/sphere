@@ -2,7 +2,14 @@ use std::sync::Arc;
 
 use ash::{khr, vk};
 
-use crate::{device::Device, error::Error, image::Image, instance::Instance, surface::Surface};
+use crate::{
+    device::{Device, Queue},
+    error::Error,
+    image::Image,
+    instance::Instance,
+    surface::Surface,
+    sync::{Fence, Semaphore},
+};
 
 pub struct Swapchain {
     ext: khr::swapchain::Device,
@@ -25,7 +32,6 @@ pub struct SwapchainCreateInfo<'a> {
     pub instance: &'a Instance,
     pub device: Arc<Device>,
     pub surface: Arc<Surface>,
-    pub physical_device: vk::PhysicalDevice,
     pub preferred_format: vk::Format,
     pub preferred_colorspace: vk::ColorSpaceKHR,
     pub preferred_present_mode: vk::PresentModeKHR,
@@ -35,9 +41,9 @@ impl Swapchain {
     pub fn new(info: SwapchainCreateInfo<'_>) -> Result<Self, Error> {
         let mut this = Self {
             ext: khr::swapchain::Device::new(info.instance.handle(), info.device.handle()),
-            device: info.device,
+            device: info.device.clone(),
             surface: info.surface,
-            physical_device: info.physical_device,
+            physical_device: info.device.physical_device(),
             swapchain: None,
             format: None,
             images: Vec::with_capacity(2),
@@ -56,18 +62,28 @@ impl Swapchain {
     pub fn acquire_image(
         &mut self,
         timeout: u64,
-        semaphore: Option<vk::Semaphore>,
-        fence: Option<vk::Fence>,
+        semaphore: Option<&Semaphore>,
+        fence: Option<&Fence>,
     ) -> Result<Arc<Image>, Error> {
         if self.swapchain.is_none() {
             self.recreate()?;
         }
 
         let acquire_info = vk::AcquireNextImageInfoKHR::default()
-            .fence(fence.unwrap_or_else(vk::Fence::null))
-            .semaphore(semaphore.unwrap_or_else(vk::Semaphore::null))
             .swapchain(self.swapchain.unwrap())
             .timeout(timeout);
+
+        let acquire_info = if let Some(fence) = fence {
+            acquire_info.fence(fence.handle())
+        } else {
+            acquire_info
+        };
+
+        let acquire_info = if let Some(semaphore) = semaphore {
+            acquire_info.semaphore(semaphore.handle())
+        } else {
+            acquire_info
+        };
 
         let (idx, is_suboptimal) = unsafe { self.ext.acquire_next_image2(&acquire_info)? };
         if is_suboptimal {
@@ -79,20 +95,21 @@ impl Swapchain {
         Ok(self.images[idx as usize].clone())
     }
 
-    pub fn present(&mut self, queue: vk::Queue, semaphore: vk::Semaphore) -> Result<(), Error> {
+    pub fn present(&mut self, queue: &Queue, semaphore: &Semaphore) -> Result<(), Error> {
         let swapchain = self
             .swapchain
             .as_ref()
             .ok_or(Error::PresentWithoutSwapchain)?;
 
         let mut results = [vk::Result::default()];
+        let semaphore = semaphore.handle();
         let present_info = vk::PresentInfoKHR::default()
             .image_indices(std::slice::from_ref(&self.current_idx))
             .results(&mut results)
             .swapchains(std::slice::from_ref(swapchain))
             .wait_semaphores(std::slice::from_ref(&semaphore));
 
-        let is_suboptimal = unsafe { self.ext.queue_present(queue, &present_info)? };
+        let is_suboptimal = unsafe { self.ext.queue_present(queue.handle(), &present_info)? };
 
         if results[0] != vk::Result::SUCCESS {
             return Err(results[0].into());
@@ -114,6 +131,14 @@ impl Swapchain {
         self.preferred_colorspace = colorspace;
 
         self.recreate()
+    }
+
+    pub fn image_count(&self) -> usize {
+        self.images.len()
+    }
+
+    pub fn current_image_idx(&self) -> usize {
+        self.current_idx as usize
     }
 
     fn recreate(&mut self) -> Result<(), Error> {
