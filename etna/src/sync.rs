@@ -73,4 +73,13 @@ impl Fence {
                 .map_err(Into::into)
         }
     }
+
+    pub fn reset(&self) -> Result<(), Error> {
+        unsafe {
+            self.device
+                .handle()
+                .reset_fences(&[self.handle])
+                .map_err(Into::into)
+        }
+    }
 }
