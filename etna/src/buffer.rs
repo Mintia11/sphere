@@ -6,11 +6,12 @@ use gpu_allocator::{
     vulkan::{Allocation, AllocationCreateDesc, AllocationScheme},
 };
 
-use crate::{Device, error::Error};
+use crate::{Device, command_buffer::CommandBuffer, error::Error};
 
 pub struct Buffer {
     handle: vk::Buffer,
     allocation: Option<Allocation>,
+    size: u64,
 
     device: Arc<Device>,
 }
@@ -38,9 +39,104 @@ impl Device {
         Ok(Buffer {
             handle: buffer,
             allocation: Some(allocation),
+            size,
 
             device: self.clone(),
         })
+    }
+
+    pub fn create_and_upload_buffer(
+        self: &Arc<Self>,
+        data: &[u8],
+        location: MemoryLocation,
+    ) -> Result<Buffer, Error> {
+        let mut buffer = self.create_buffer(data.len() as u64, location)?;
+        buffer.upload(data)?;
+
+        Ok(buffer)
+    }
+}
+
+impl Buffer {
+    pub fn upload(&mut self, data: &[u8]) -> Result<(), Error> {
+        let mut staging = self
+            .device
+            .create_buffer(self.size, MemoryLocation::CpuToGpu)?;
+        {
+            let staging = staging.as_mut_slice().unwrap();
+            staging.copy_from_slice(data);
+        }
+
+        let command_buffer = self.device.allocate_transfer_command_buffer()?;
+        command_buffer.begin()?;
+        command_buffer.buffer_pipeline_barrier(
+            &staging,
+            vk::AccessFlags2::NONE,
+            vk::AccessFlags2::TRANSFER_READ,
+        );
+        command_buffer.buffer_pipeline_barrier(
+            self,
+            vk::AccessFlags2::NONE,
+            vk::AccessFlags2::TRANSFER_WRITE,
+        );
+        command_buffer.copy_buffers(&staging, self);
+        command_buffer.end()?;
+
+        let submit_fence = self.device.create_fence(false)?;
+        self.device.submit_queue(
+            self.device.transfer_queue(),
+            &command_buffer,
+            None,
+            None,
+            Some(&submit_fence),
+        )?;
+        submit_fence.wait(u64::MAX)?;
+
+        Ok(())
+    }
+
+    pub fn as_mut_slice(&mut self) -> Option<&mut [u8]> {
+        self.allocation.as_mut()?.mapped_slice_mut()
+    }
+
+    pub fn handle(&self) -> vk::Buffer {
+        self.handle
+    }
+}
+
+impl CommandBuffer {
+    pub fn buffer_pipeline_barrier(
+        &self,
+        buffer: &Buffer,
+        src_access_mask: vk::AccessFlags2,
+        dst_access_mask: vk::AccessFlags2,
+    ) {
+        let buffer_memory_barrier = vk::BufferMemoryBarrier2::default()
+            .buffer(buffer.handle())
+            .src_access_mask(src_access_mask)
+            .dst_access_mask(dst_access_mask);
+
+        unsafe {
+            self.device.handle().cmd_pipeline_barrier2(
+                self.handle(),
+                &vk::DependencyInfo::default()
+                    .buffer_memory_barriers(std::slice::from_ref(&buffer_memory_barrier)),
+            )
+        }
+    }
+
+    pub fn copy_buffers(&self, from: &Buffer, to: &mut Buffer) {
+        let region = vk::BufferCopy2::default().size(from.size);
+
+        unsafe {
+            self.device.handle().cmd_copy_buffer2(
+                self.handle(),
+                &vk::CopyBufferInfo2::default()
+                    .dst_buffer(to.handle())
+                    .src_buffer(from.handle())
+                    .regions(std::slice::from_ref(&region)),
+            )
+        }
     }
 }
 
