@@ -41,6 +41,20 @@ impl Device {
     pub fn handle(&self) -> &ash::Device {
         &self.device
     }
+
+    pub fn physical_device(&self) -> vk::PhysicalDevice {
+        self.physical_device
+    }
+
+    pub fn graphics_queue(&self) -> &Queue {
+        &self.graphics_queue
+    }
+}
+
+impl Queue {
+    pub fn handle(&self) -> vk::Queue {
+        self.handle
+    }
 }
 
 fn pick_physical_device(
