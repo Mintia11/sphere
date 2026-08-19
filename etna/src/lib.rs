@@ -4,6 +4,7 @@ pub use crate::{
 pub use ash::{self, vk};
 pub use gpu_allocator;
 
+pub mod buffer;
 pub mod codec;
 pub mod command_buffer;
 pub mod device;
