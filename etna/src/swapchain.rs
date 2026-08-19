@@ -171,7 +171,7 @@ impl Swapchain {
             .image_extent(surface_capabilities.current_extent)
             .image_format(chosen_format.format)
             .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
             .pre_transform(surface_capabilities.current_transform)
             .present_mode(chosen_present_mode)
             .min_image_count(surface_capabilities.min_image_count)

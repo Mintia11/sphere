@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ash::vk;
 
-use crate::{Device, Image, error::Error};
+use crate::{Device, error::Error};
 
 pub struct CommandBuffer {
     handle: vk::CommandBuffer,

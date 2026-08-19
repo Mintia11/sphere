@@ -1,5 +1,3 @@
-use std::ffi::CStr;
-
 use ash::{ext, khr, vk};
 
 use crate::error::Error;
