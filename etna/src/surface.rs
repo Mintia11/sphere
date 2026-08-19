@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ash::{khr, vk};
 use raw_window_handle::RawWindowHandle;
 
@@ -9,7 +11,10 @@ pub struct Surface {
 }
 
 impl Surface {
-    pub fn new(instance: &Instance, raw_window_handle: RawWindowHandle) -> Result<Self, Error> {
+    pub fn new(
+        instance: &Instance,
+        raw_window_handle: RawWindowHandle,
+    ) -> Result<Arc<Self>, Error> {
         let surface = match raw_window_handle {
             RawWindowHandle::Win32(win32) => {
                 let os_extension =
@@ -24,10 +29,10 @@ impl Surface {
             _ => todo!("Unimplemented surface creation for: {raw_window_handle:?}"),
         };
 
-        Ok(Surface {
+        Ok(Arc::new(Surface {
             surface,
             ext: khr::surface::Instance::new(instance.entry(), instance.handle()),
-        })
+        }))
     }
 
     pub fn handle(&self) -> vk::SurfaceKHR {
@@ -62,5 +67,11 @@ impl Surface {
             self.ext
                 .get_physical_device_surface_present_modes(physical_device, self.surface)
         }
+    }
+}
+
+impl Drop for Surface {
+    fn drop(&mut self) {
+        unsafe { self.ext.destroy_surface(self.surface, None) };
     }
 }
