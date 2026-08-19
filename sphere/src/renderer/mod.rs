@@ -116,8 +116,8 @@ impl Renderer {
         self.device.submit_queue(
             self.device.graphics_queue(),
             command_buffer,
-            &self.frames[self.frame_idx].image_available,
-            &self.frames[self.frame_idx].render_finished,
+            Some(&self.frames[self.frame_idx].image_available),
+            Some(&self.frames[self.frame_idx].render_finished),
             Some(&self.frames[self.frame_idx].inflight),
         )?;
 
