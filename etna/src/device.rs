@@ -1,6 +1,13 @@
-use std::{ffi::CStr, sync::Arc};
+use std::{
+    ffi::CStr,
+    sync::{Arc, Mutex},
+};
 
 use ash::vk;
+use gpu_allocator::{
+    AllocationSizes, AllocatorDebugSettings,
+    vulkan::{Allocator, AllocatorCreateDesc},
+};
 
 use crate::{
     command_buffer::CommandBuffer,
@@ -12,6 +19,7 @@ use crate::{
 pub struct Device {
     physical_device: vk::PhysicalDevice,
     device: ash::Device,
+    allocator: Mutex<Allocator>,
 
     graphics_queue: Queue,
 }
@@ -45,10 +53,21 @@ impl Device {
             },
         };
 
+        let allocator_info = AllocatorCreateDesc {
+            instance: instance.handle().clone(),
+            device: device.clone(),
+            physical_device,
+            debug_settings: AllocatorDebugSettings::default(),
+            buffer_device_address: false, // TODO: Use this it's so good
+            allocation_sizes: AllocationSizes::default(),
+        };
+        let allocator = Allocator::new(&allocator_info)?;
+
         Ok(Arc::new(Device {
             physical_device,
             device,
             graphics_queue,
+            allocator: Mutex::new(allocator),
         }))
     }
 
@@ -58,6 +77,10 @@ impl Device {
 
     pub fn physical_device(&self) -> vk::PhysicalDevice {
         self.physical_device
+    }
+
+    pub fn allocator(&self) -> &Mutex<Allocator> {
+        &self.allocator
     }
 
     pub fn graphics_queue(&self) -> &Queue {

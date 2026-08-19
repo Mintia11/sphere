@@ -13,4 +13,7 @@ pub enum Error {
 
     #[error("Tried to present without a valid swapchain")]
     PresentWithoutSwapchain,
+
+    #[error("Gpu allocator error: {0}")]
+    Allocation(#[from] gpu_allocator::AllocationError),
 }
