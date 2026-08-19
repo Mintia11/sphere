@@ -10,7 +10,7 @@ use crate::{Device, error::Error};
 
 pub struct Buffer {
     handle: vk::Buffer,
-    allocation: Allocation,
+    allocation: Option<Allocation>,
 
     device: Arc<Device>,
 }
@@ -37,9 +37,20 @@ impl Device {
 
         Ok(Buffer {
             handle: buffer,
-            allocation,
+            allocation: Some(allocation),
 
             device: self.clone(),
         })
+    }
+}
+
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        let mut allocator = self.device.allocator().lock().unwrap();
+        allocator.free(self.allocation.take().unwrap()).unwrap();
+
+        unsafe {
+            self.device.handle().destroy_buffer(self.handle, None);
+        }
     }
 }
