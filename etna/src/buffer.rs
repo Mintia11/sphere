@@ -20,9 +20,10 @@ impl Device {
     pub fn create_buffer(
         self: &Arc<Self>,
         size: u64,
+        usage: vk::BufferUsageFlags,
         location: MemoryLocation,
     ) -> Result<Buffer, Error> {
-        let buffer_info = vk::BufferCreateInfo::default().size(size);
+        let buffer_info = vk::BufferCreateInfo::default().size(size).usage(usage);
         let buffer = unsafe { self.handle().create_buffer(&buffer_info, None)? };
 
         let alloc_info = AllocationCreateDesc {
@@ -36,6 +37,13 @@ impl Device {
         let mut allocator = self.allocator().lock().unwrap();
         let allocation = allocator.allocate(&alloc_info)?;
 
+        let bind_info = vk::BindBufferMemoryInfo::default()
+            .buffer(buffer)
+            .memory(unsafe { allocation.memory() })
+            .memory_offset(allocation.offset());
+
+        unsafe { self.handle().bind_buffer_memory2(&[bind_info])? };
+
         Ok(Buffer {
             handle: buffer,
             allocation: Some(allocation),
@@ -48,9 +56,14 @@ impl Device {
     pub fn create_and_upload_buffer(
         self: &Arc<Self>,
         data: &[u8],
+        usage: vk::BufferUsageFlags,
         location: MemoryLocation,
     ) -> Result<Buffer, Error> {
-        let mut buffer = self.create_buffer(data.len() as u64, location)?;
+        let mut buffer = self.create_buffer(
+            data.len() as u64,
+            usage | vk::BufferUsageFlags::TRANSFER_DST,
+            location,
+        )?;
         buffer.upload(data)?;
 
         Ok(buffer)
@@ -65,12 +78,14 @@ impl Buffer {
             return Ok(());
         }
 
-        let mut staging = self
-            .device
-            .create_buffer(self.size, MemoryLocation::CpuToGpu)?;
+        let mut staging = self.device.create_buffer(
+            self.size,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            MemoryLocation::CpuToGpu,
+        )?;
         {
             let staging = staging.as_mut_slice().unwrap();
-            staging.copy_from_slice(data);
+            staging[..data.len()].copy_from_slice(data);
         }
 
         let command_buffer = self.device.allocate_transfer_command_buffer()?;
@@ -79,11 +94,15 @@ impl Buffer {
             &staging,
             vk::AccessFlags2::NONE,
             vk::AccessFlags2::TRANSFER_READ,
+            vk::PipelineStageFlags2::NONE,
+            vk::PipelineStageFlags2::COPY,
         );
         command_buffer.buffer_pipeline_barrier(
             self,
             vk::AccessFlags2::NONE,
             vk::AccessFlags2::TRANSFER_WRITE,
+            vk::PipelineStageFlags2::NONE,
+            vk::PipelineStageFlags2::COPY,
         );
         command_buffer.copy_buffers(&staging, self);
         command_buffer.end()?;
@@ -116,11 +135,16 @@ impl CommandBuffer {
         buffer: &Buffer,
         src_access_mask: vk::AccessFlags2,
         dst_access_mask: vk::AccessFlags2,
+        src_stage_mask: vk::PipelineStageFlags2,
+        dst_stage_mask: vk::PipelineStageFlags2,
     ) {
         let buffer_memory_barrier = vk::BufferMemoryBarrier2::default()
             .buffer(buffer.handle())
+            .dst_access_mask(dst_access_mask)
+            .dst_stage_mask(dst_stage_mask)
+            .size(u64::MAX)
             .src_access_mask(src_access_mask)
-            .dst_access_mask(dst_access_mask);
+            .src_stage_mask(src_stage_mask);
 
         unsafe {
             self.device.handle().cmd_pipeline_barrier2(

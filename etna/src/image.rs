@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicI32, Ordering},
+};
 
 use ash::vk;
 use gpu_allocator::{
@@ -13,6 +16,8 @@ pub struct Image {
     view: vk::ImageView,
 
     extent: vk::Extent3D,
+
+    current_layout: AtomicI32,
 
     allocation: Option<Allocation>,
 
@@ -35,12 +40,12 @@ impl Device {
             .extent(extent)
             .format(format)
             .image_type(vk::ImageType::TYPE_2D)
-            .initial_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
             .mip_levels(1)
             .samples(vk::SampleCountFlags::TYPE_1)
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(usage);
+            .usage(usage | vk::ImageUsageFlags::TRANSFER_DST);
 
         let image = unsafe { self.handle().create_image(&image_info, None)? };
 
@@ -54,6 +59,12 @@ impl Device {
 
         let mut allocator = self.allocator().lock().unwrap();
         let allocation = allocator.allocate(&alloc_info)?;
+
+        let bind_info = vk::BindImageMemoryInfo::default()
+            .image(image)
+            .memory(unsafe { allocation.memory() })
+            .memory_offset(allocation.offset());
+        unsafe { self.handle().bind_image_memory2(&[bind_info])? };
 
         let image_view_info = vk::ImageViewCreateInfo::default()
             .components(
@@ -80,6 +91,7 @@ impl Device {
             image,
             view,
             extent,
+            current_layout: AtomicI32::new(vk::ImageLayout::UNDEFINED.as_raw()),
             allocation: Some(allocation),
             device: self.clone(),
         })
@@ -113,15 +125,19 @@ impl Image {
             view,
             extent,
 
-            device,
+            current_layout: AtomicI32::new(vk::ImageLayout::UNDEFINED.as_raw()),
+
             allocation: None,
+            device,
         }
     }
 
     pub fn upload(&mut self, data: &[u8]) -> Result<(), Error> {
-        let buffer = self
-            .device
-            .create_and_upload_buffer(data, MemoryLocation::CpuToGpu)?;
+        let buffer = self.device.create_and_upload_buffer(
+            data,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            MemoryLocation::CpuToGpu,
+        )?;
 
         let command_buffer = self.device.allocate_transfer_command_buffer()?;
         command_buffer.begin()?;
@@ -129,10 +145,11 @@ impl Image {
             &buffer,
             vk::AccessFlags2::NONE,
             vk::AccessFlags2::TRANSFER_READ,
+            vk::PipelineStageFlags2::NONE,
+            vk::PipelineStageFlags2::COPY,
         );
         command_buffer.image_pipeline_barrier(
             self,
-            vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             vk::AccessFlags2::NONE,
             vk::AccessFlags2::TRANSFER_WRITE,
@@ -158,6 +175,18 @@ impl Image {
     pub fn handle(&self) -> vk::Image {
         self.image
     }
+
+    pub fn view(&self) -> vk::ImageView {
+        self.view
+    }
+
+    pub fn extent(&self) -> vk::Extent3D {
+        self.extent
+    }
+
+    pub fn current_layout(&self) -> vk::ImageLayout {
+        vk::ImageLayout::from_raw(self.current_layout.load(Ordering::SeqCst))
+    }
 }
 
 impl CommandBuffer {
@@ -171,7 +200,7 @@ impl CommandBuffer {
                 vk::ImageSubresourceLayers::default()
                     .aspect_mask(vk::ImageAspectFlags::COLOR)
                     .base_array_layer(0)
-                    .layer_count(0)
+                    .layer_count(1)
                     .mip_level(0),
             );
 
@@ -188,10 +217,10 @@ impl CommandBuffer {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn image_pipeline_barrier(
         &self,
         image: &Image,
-        old_layout: vk::ImageLayout,
         new_layout: vk::ImageLayout,
         src_access_mask: vk::AccessFlags2,
         dst_access_mask: vk::AccessFlags2,
@@ -203,7 +232,7 @@ impl CommandBuffer {
             .dst_stage_mask(dst_stage_mask)
             .image(image.handle())
             .new_layout(new_layout)
-            .old_layout(old_layout)
+            .old_layout(image.current_layout())
             .src_access_mask(src_access_mask)
             .src_stage_mask(src_stage_mask)
             .subresource_range(
@@ -222,6 +251,10 @@ impl CommandBuffer {
                     .image_memory_barriers(std::slice::from_ref(&image_memory_barrier)),
             )
         }
+
+        image
+            .current_layout
+            .store(new_layout.as_raw(), Ordering::SeqCst);
     }
 }
 
