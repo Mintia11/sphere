@@ -156,12 +156,15 @@ fn pick_physical_device(
     device_exts: &[&'static CStr],
 ) -> Result<(vk::PhysicalDevice, u32), Error> {
     for physical_device in unsafe { instance.handle().enumerate_physical_devices()? } {
-        let props = unsafe {
+        let mut props = vk::PhysicalDeviceProperties2::default();
+
+        unsafe {
             instance
                 .handle()
-                .get_physical_device_properties(physical_device)
-        };
+                .get_physical_device_properties2(physical_device, &mut props)
+        }
 
+        let props = props.properties;
         println!(
             "physical device {:?} ({:?}):",
             props.device_name_as_c_str().unwrap(),
@@ -174,13 +177,13 @@ fn pick_physical_device(
                 .enumerate_device_extension_properties(physical_device)?
         };
 
-        for ext in &extensions {
-            println!(
-                "extension {:?}: version {}",
-                ext.extension_name_as_c_str().unwrap(),
-                ext.spec_version
-            );
-        }
+        // for ext in &extensions {
+        //     println!(
+        //         "extension {:?}: version {}",
+        //         ext.extension_name_as_c_str().unwrap(),
+        //         ext.spec_version
+        //     );
+        // }
 
         let mut has_all_exts = true;
         for needed in device_exts {
@@ -198,15 +201,24 @@ fn pick_physical_device(
             continue;
         }
 
-        let queue_families = unsafe {
+        let queue_family_count = unsafe {
             instance
                 .handle()
-                .get_physical_device_queue_family_properties(physical_device)
+                .get_physical_device_queue_family_properties2_len(physical_device)
         };
+
+        let mut queue_families = vec![vk::QueueFamilyProperties2::default(); queue_family_count];
+        unsafe {
+            instance
+                .handle()
+                .get_physical_device_queue_family_properties2(physical_device, &mut queue_families);
+        }
 
         let mut graphics_queue: Option<u32> = None;
 
         for (i, queue_family) in queue_families.iter().enumerate() {
+            let queue_family = queue_family.queue_family_properties;
+
             println!(
                 "queue family {i}: {:?} ({} queues)",
                 queue_family.queue_flags, queue_family.queue_count

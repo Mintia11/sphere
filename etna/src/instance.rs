@@ -16,8 +16,6 @@ impl Instance {
         for extension in &instance_extensions {
             let name = extension.extension_name_as_c_str().unwrap();
 
-            println!("extension {:?}: version {}", name, extension.spec_version);
-
             if name == ext::swapchain_colorspace::NAME {
                 used_extensions.push(ext::swapchain_colorspace::NAME.as_ptr());
             }
@@ -33,30 +31,11 @@ impl Instance {
         #[cfg(windows)]
         used_extensions.push(khr::win32_surface::NAME.as_ptr());
 
-        let instance_layers = unsafe { entry.enumerate_instance_layer_properties()? };
-
-        let mut used_layers = vec![];
-        for layer in &instance_layers {
-            let name = layer.layer_name_as_c_str().unwrap();
-            let description = layer.description_as_c_str().unwrap();
-
-            println!(
-                "layer {:?}: {:?} - version {}",
-                name, description, layer.spec_version
-            );
-
-            #[cfg(debug_assertions)]
-            if name == c"VK_LAYER_KHRONOS_validation" {
-                used_layers.push(c"VK_LAYER_KHRONOS_validation".as_ptr());
-            }
-        }
-
         let application_info = vk::ApplicationInfo::default().api_version(vk::API_VERSION_1_3);
 
         let instance_info = vk::InstanceCreateInfo::default()
             .application_info(&application_info)
-            .enabled_extension_names(&used_extensions)
-            .enabled_layer_names(&used_layers);
+            .enabled_extension_names(&used_extensions);
 
         let instance = unsafe { entry.create_instance(&instance_info, None)? };
 
