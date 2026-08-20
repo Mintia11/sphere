@@ -172,6 +172,14 @@ impl Swapchain {
 
         let surface_capabilities = self.surface.capabilities(self.physical_device)?;
 
+        let mut image_count = (surface_capabilities.min_image_count + 1).max(3);
+
+        if surface_capabilities.max_image_count > 0
+            && image_count > surface_capabilities.max_image_count
+        {
+            image_count = surface_capabilities.max_image_count;
+        }
+
         let swapchain_info = vk::SwapchainCreateInfoKHR::default()
             .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
             .image_array_layers(1)
@@ -182,7 +190,7 @@ impl Swapchain {
             .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
             .pre_transform(surface_capabilities.current_transform)
             .present_mode(chosen_present_mode)
-            .min_image_count(surface_capabilities.min_image_count)
+            .min_image_count(image_count)
             .surface(self.surface.handle());
 
         let swapchain_info = if let Some(old) = self.swapchain {
