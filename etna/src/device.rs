@@ -156,34 +156,11 @@ fn pick_physical_device(
     device_exts: &[&'static CStr],
 ) -> Result<(vk::PhysicalDevice, u32), Error> {
     for physical_device in unsafe { instance.handle().enumerate_physical_devices()? } {
-        let mut props = vk::PhysicalDeviceProperties2::default();
-
-        unsafe {
-            instance
-                .handle()
-                .get_physical_device_properties2(physical_device, &mut props)
-        }
-
-        let props = props.properties;
-        println!(
-            "physical device {:?} ({:?}):",
-            props.device_name_as_c_str().unwrap(),
-            props.device_type
-        );
-
         let extensions = unsafe {
             instance
                 .handle()
                 .enumerate_device_extension_properties(physical_device)?
         };
-
-        // for ext in &extensions {
-        //     println!(
-        //         "extension {:?}: version {}",
-        //         ext.extension_name_as_c_str().unwrap(),
-        //         ext.spec_version
-        //     );
-        // }
 
         let mut has_all_exts = true;
         for needed in device_exts {
@@ -218,11 +195,6 @@ fn pick_physical_device(
 
         for (i, queue_family) in queue_families.iter().enumerate() {
             let queue_family = queue_family.queue_family_properties;
-
-            println!(
-                "queue family {i}: {:?} ({} queues)",
-                queue_family.queue_flags, queue_family.queue_count
-            );
 
             if queue_family.queue_flags.contains(vk::QueueFlags::GRAPHICS) {
                 graphics_queue = Some(i as u32);
