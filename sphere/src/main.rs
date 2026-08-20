@@ -14,7 +14,8 @@ mod renderer;
 struct App {
     window: Option<Window>,
     renderer: Option<Renderer>,
-    ctx: EguiContext,
+    ctx: Option<EguiContext>,
+    ciao: bool,
 }
 
 impl ApplicationHandler for App {
@@ -29,10 +30,13 @@ impl ApplicationHandler for App {
         let handle = window.window_handle().expect("Failed to get window handle");
         self.renderer =
             Some(Renderer::new(handle.as_raw()).expect("Failed to initialize the vulkan renderer"));
+
+        let renderer = self.renderer.as_ref().unwrap();
+        self.ctx = Some(EguiContext::new(&renderer.device, &renderer.swapchain));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        self.ctx.on_window_event(&event);
+        self.ctx.as_mut().unwrap().on_window_event(&event);
 
         match event {
             WindowEvent::CloseRequested => {
@@ -40,8 +44,29 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
+                let ctx = self.ctx.as_mut().unwrap();
+                let data = ctx.run_ui(self.window.as_ref().unwrap(), |ui| {
+                    egui::CentralPanel::default().show(ui, |ui| {
+                        ui.label("Hello world!");
+                        if ui.button("Click me").clicked() {
+                            self.ciao = !self.ciao;
+                        }
+
+                        egui::Window::new(if self.ciao { "My Window" } else { "Ciao!" }).show(
+                            ui.ctx(),
+                            |ui| {
+                                ui.label("Hello World!");
+                            },
+                        );
+                    });
+                });
+
                 let renderer = self.renderer.as_mut().unwrap();
-                renderer.draw().expect("Error while drawing frame");
+                let (command_buffer, image) = renderer.begin().expect("Failed to begin rendering");
+                ctx.renderer
+                    .draw(command_buffer, &image, data)
+                    .expect("Failed to render ui");
+                renderer.end().expect("Failed to end rendering");
 
                 let window = self.window.as_ref().unwrap();
                 window.request_redraw();

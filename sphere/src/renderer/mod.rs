@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use etna::{
-    Device, Instance, Surface, Swapchain,
+    Device, Image, Instance, Surface, Swapchain,
     ash::{ext, khr},
     command_buffer::CommandBuffer,
     error::Error,
@@ -18,6 +18,7 @@ pub struct Renderer {
     pub swapchain: Swapchain,
 
     frames: Vec<FrameData>,
+    current_image: Option<Arc<Image>>,
     frame_idx: usize,
 }
 
@@ -48,16 +49,7 @@ impl Renderer {
     pub fn new(window_handle: RawWindowHandle) -> Result<Self, Error> {
         let instance = Instance::new()?;
         let surface = Surface::new(&instance, window_handle)?;
-        let device = Device::new(
-            &instance,
-            &[
-                khr::swapchain::NAME,
-                ext::descriptor_heap::NAME,
-                khr::maintenance5::NAME,
-                ext::pageable_device_local_memory::NAME,
-                ext::memory_priority::NAME,
-            ],
-        )?;
+        let device = Device::new(&instance, &[])?;
         let swapchain = Swapchain::new(SwapchainCreateInfo {
             instance: &instance,
             device: device.clone(),
@@ -78,11 +70,12 @@ impl Renderer {
             surface,
             swapchain,
             frames,
+            current_image: None,
             frame_idx: 0,
         })
     }
 
-    pub fn draw(&mut self) -> Result<(), Error> {
+    pub fn begin(&mut self) -> Result<(&CommandBuffer, Arc<Image>), Error> {
         self.frames[self.frame_idx].inflight.wait(u64::MAX)?;
         self.frames[self.frame_idx].inflight.reset()?;
 
@@ -91,6 +84,7 @@ impl Renderer {
             Some(&self.frames[self.frame_idx].image_available),
             None,
         )?;
+        self.current_image = Some(image.clone());
 
         let command_buffer = &self.frames[self.frame_idx].command_buffer;
         command_buffer.reset()?;
@@ -98,11 +92,10 @@ impl Renderer {
         command_buffer.begin()?;
         command_buffer.image_pipeline_barrier(
             &image,
-            vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             vk::AccessFlags2::NONE,
             vk::AccessFlags2::TRANSFER_WRITE,
-            vk::PipelineStageFlags2::ALL_COMMANDS,
+            vk::PipelineStageFlags2::TOP_OF_PIPE,
             vk::PipelineStageFlags2::ALL_TRANSFER,
         );
         unsafe {
@@ -111,7 +104,7 @@ impl Renderer {
                 image.handle(),
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 &vk::ClearColorValue {
-                    float32: [1.0, 0.0, 0.0, 0.0],
+                    float32: [0.0, 0.0, 0.0, 0.0],
                 },
                 &[vk::ImageSubresourceRange::default()
                     .aspect_mask(vk::ImageAspectFlags::COLOR)
@@ -121,14 +114,21 @@ impl Renderer {
                     .level_count(1)],
             )
         };
+
+        Ok((command_buffer, image.clone()))
+    }
+
+    pub fn end(&mut self) -> Result<(), Error> {
+        let command_buffer = &self.frames[self.frame_idx].command_buffer;
+
+        let image = self.current_image.as_ref().unwrap();
         command_buffer.image_pipeline_barrier(
-            &image,
-            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            image,
             vk::ImageLayout::PRESENT_SRC_KHR,
-            vk::AccessFlags2::TRANSFER_WRITE,
+            vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
             vk::AccessFlags2::NONE,
-            vk::PipelineStageFlags2::ALL_TRANSFER,
-            vk::PipelineStageFlags2::TOP_OF_PIPE,
+            vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+            vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
         );
         command_buffer.end()?;
 
