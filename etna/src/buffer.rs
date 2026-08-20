@@ -124,6 +124,12 @@ impl Buffer {
         self.allocation.as_mut()?.mapped_slice_mut()
     }
 
+    pub fn write(&mut self, offset: usize, data: &[u8]) -> Result<(), Error> {
+        let slice = self.as_mut_slice().ok_or(Error::WriteToUnmapped)?;
+        slice[offset..offset + data.len()].copy_from_slice(data);
+        Ok(())
+    }
+
     pub fn handle(&self) -> vk::Buffer {
         self.handle
     }

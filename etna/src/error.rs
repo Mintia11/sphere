@@ -16,4 +16,7 @@ pub enum Error {
 
     #[error("Gpu allocator error: {0}")]
     Allocation(#[from] gpu_allocator::AllocationError),
+
+    #[error("Tried to write to an unmapped buffer")]
+    WriteToUnmapped,
 }

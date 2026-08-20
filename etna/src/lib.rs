@@ -8,6 +8,7 @@ pub mod buffer;
 pub mod codec;
 pub mod command_buffer;
 pub mod device;
+pub mod dynamic_buffer;
 pub mod error;
 pub mod image;
 pub mod instance;
