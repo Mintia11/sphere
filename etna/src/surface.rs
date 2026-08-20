@@ -8,6 +8,7 @@ use crate::{error::Error, instance::Instance};
 pub struct Surface {
     surface: vk::SurfaceKHR,
     ext: khr::surface::Instance,
+    caps_ext: khr::get_surface_capabilities2::Instance,
 }
 
 impl Surface {
@@ -32,6 +33,10 @@ impl Surface {
         Ok(Arc::new(Surface {
             surface,
             ext: khr::surface::Instance::new(instance.entry(), instance.handle()),
+            caps_ext: khr::get_surface_capabilities2::Instance::new(
+                instance.entry(),
+                instance.handle(),
+            ),
         }))
     }
 
@@ -43,20 +48,42 @@ impl Surface {
         &self,
         physical_device: vk::PhysicalDevice,
     ) -> Result<Vec<vk::SurfaceFormatKHR>, vk::Result> {
+        let surface_info = vk::PhysicalDeviceSurfaceInfo2KHR::default().surface(self.surface);
+        let format_count = unsafe {
+            self.caps_ext
+                .get_physical_device_surface_formats2_len(physical_device, &surface_info)?
+        };
+
+        let mut formats = vec![vk::SurfaceFormat2KHR::default(); format_count];
+
         unsafe {
-            self.ext
-                .get_physical_device_surface_formats(physical_device, self.surface)
+            self.caps_ext.get_physical_device_surface_formats2(
+                physical_device,
+                &surface_info,
+                &mut formats,
+            )?;
         }
+
+        Ok(formats.iter().map(|f| f.surface_format).collect())
     }
 
     pub fn capabilities(
         &self,
         physical_device: vk::PhysicalDevice,
     ) -> Result<vk::SurfaceCapabilitiesKHR, vk::Result> {
+        let surface_info = vk::PhysicalDeviceSurfaceInfo2KHR::default().surface(self.surface);
+
+        let mut surface_capabilities = vk::SurfaceCapabilities2KHR::default();
+
         unsafe {
-            self.ext
-                .get_physical_device_surface_capabilities(physical_device, self.surface)
+            self.caps_ext.get_physical_device_surface_capabilities2(
+                physical_device,
+                &surface_info,
+                &mut surface_capabilities,
+            )?;
         }
+
+        Ok(surface_capabilities.surface_capabilities)
     }
 
     pub fn present_modes(

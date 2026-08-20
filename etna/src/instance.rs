@@ -27,6 +27,7 @@ impl Instance {
         }
 
         used_extensions.push(khr::surface::NAME.as_ptr());
+        used_extensions.push(khr::get_surface_capabilities2::NAME.as_ptr());
 
         #[cfg(windows)]
         used_extensions.push(khr::win32_surface::NAME.as_ptr());
