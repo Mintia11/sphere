@@ -3,7 +3,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use ash::vk::{self, TaggedStructure};
+use ash::{
+    ext, khr,
+    vk::{self, TaggedStructure},
+};
 use gpu_allocator::{
     AllocationSizes, AllocatorDebugSettings,
     vulkan::{Allocator, AllocatorCreateDesc},
@@ -32,11 +35,19 @@ pub struct Queue {
 
 impl Device {
     pub fn new(instance: &Instance, device_exts: &[&'static CStr]) -> Result<Arc<Self>, Error> {
-        let (physical_device, graphics_queue_family) = pick_physical_device(instance, device_exts)?;
+        let mut device_exts = device_exts.to_vec();
+        device_exts.extend([
+            khr::swapchain::NAME,
+            ext::pageable_device_local_memory::NAME,
+            ext::memory_priority::NAME,
+        ]);
+
+        let (physical_device, graphics_queue_family) =
+            pick_physical_device(instance, &device_exts)?;
         let device = create_device(
             instance,
             physical_device,
-            device_exts,
+            &device_exts,
             graphics_queue_family,
         )?;
 
@@ -58,7 +69,7 @@ impl Device {
             device: device.clone(),
             physical_device,
             debug_settings: AllocatorDebugSettings::default(),
-            buffer_device_address: false, // TODO: Use this it's so good
+            buffer_device_address: true,
             allocation_sizes: AllocationSizes::default(),
         };
         let allocator = Allocator::new(&allocator_info)?;
