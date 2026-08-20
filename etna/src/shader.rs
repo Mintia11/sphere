@@ -19,8 +19,12 @@ impl Device {
         stage: vk::ShaderStageFlags,
         code: &[u8],
     ) -> Result<Shader, Error> {
-        let (_, code, _) = unsafe { code.align_to::<u32>() };
-        let shader_module_info = vk::ShaderModuleCreateInfo::default().code(code);
+        assert!(code.len().is_multiple_of(4));
+        let code = code
+            .chunks_exact(4)
+            .map(|c| u32::from_ne_bytes(c.try_into().unwrap()))
+            .collect::<Vec<_>>();
+        let shader_module_info = vk::ShaderModuleCreateInfo::default().code(&code);
 
         let module = unsafe {
             self.handle()

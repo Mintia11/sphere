@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use ash::vk;
+use ash::vk::{self, TaggedStructure};
 use gpu_allocator::{
     AllocationSizes, AllocatorDebugSettings,
     vulkan::{Allocator, AllocatorCreateDesc},
@@ -232,9 +232,9 @@ fn create_device(
     let device_info = vk::DeviceCreateInfo::default()
         .queue_create_infos(std::slice::from_ref(&queue_info))
         .enabled_extension_names(&exts)
-        .push_next(&mut dynamic_rendering)
-        .push_next(&mut synchronization2)
-        .push_next(&mut buffer_device_address);
+        .push(&mut dynamic_rendering)
+        .push(&mut synchronization2)
+        .push(&mut buffer_device_address);
 
     let device = unsafe {
         instance

@@ -1,0 +1,3 @@
+[submodule "vendor/gpu-allocator"]
+	path = vendor/gpu-allocator
+	url = https://github.com/Mintia11/gpu-allocator

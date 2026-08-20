@@ -19,7 +19,7 @@ impl Surface {
         let surface = match raw_window_handle {
             RawWindowHandle::Win32(win32) => {
                 let os_extension =
-                    khr::win32_surface::Instance::new(instance.entry(), instance.handle());
+                    khr::win32_surface::Instance::load(instance.entry(), instance.handle());
 
                 let create_info = vk::Win32SurfaceCreateInfoKHR::default()
                     .hwnd(win32.hwnd.get())
@@ -32,8 +32,8 @@ impl Surface {
 
         Ok(Arc::new(Surface {
             surface,
-            ext: khr::surface::Instance::new(instance.entry(), instance.handle()),
-            caps_ext: khr::get_surface_capabilities2::Instance::new(
+            ext: khr::surface::Instance::load(instance.entry(), instance.handle()),
+            caps_ext: khr::get_surface_capabilities2::Instance::load(
                 instance.entry(),
                 instance.handle(),
             ),

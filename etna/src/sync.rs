@@ -83,3 +83,9 @@ impl Fence {
         }
     }
 }
+
+impl Drop for Fence {
+    fn drop(&mut self) {
+        unsafe { self.device.handle().destroy_fence(self.handle, None) };
+    }
+}

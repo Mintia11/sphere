@@ -24,6 +24,7 @@ pub struct Swapchain {
     current_idx: u32,
 
     preferred_format: vk::Format,
+    current_format: vk::Format,
     preferred_colorspace: vk::ColorSpaceKHR,
     preferred_present_mode: vk::PresentModeKHR,
 }
@@ -40,7 +41,7 @@ pub struct SwapchainCreateInfo<'a> {
 impl Swapchain {
     pub fn new(info: SwapchainCreateInfo<'_>) -> Result<Self, Error> {
         let mut this = Self {
-            ext: khr::swapchain::Device::new(info.instance.handle(), info.device.handle()),
+            ext: khr::swapchain::Device::load(info.instance.handle(), info.device.handle()),
             device: info.device.clone(),
             surface: info.surface,
             physical_device: info.device.physical_device(),
@@ -50,6 +51,7 @@ impl Swapchain {
             current_idx: 0,
 
             preferred_format: info.preferred_format,
+            current_format: vk::Format::default(),
             preferred_colorspace: info.preferred_colorspace,
             preferred_present_mode: info.preferred_present_mode,
         };
@@ -134,6 +136,10 @@ impl Swapchain {
         self.recreate()
     }
 
+    pub fn current_format(&self) -> vk::Format {
+        self.current_format
+    }
+
     pub fn image_count(&self) -> usize {
         self.images.len()
     }
@@ -154,6 +160,8 @@ impl Swapchain {
                 format: vk::Format::B8G8R8A8_UNORM,
                 color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
             });
+
+        self.current_format = chosen_format.format;
 
         let present_modes = self.surface.present_modes(self.physical_device)?;
         let chosen_present_mode = present_modes
@@ -237,6 +245,8 @@ impl Swapchain {
 impl Drop for Swapchain {
     fn drop(&mut self) {
         unsafe {
+            let _ = self.device.handle().device_wait_idle();
+
             if let Some(swapchain) = self.swapchain {
                 self.ext.destroy_swapchain(swapchain, None);
             }
