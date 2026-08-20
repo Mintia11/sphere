@@ -2,19 +2,20 @@ use std::sync::Arc;
 
 use etna::{
     Device, Instance, Surface, Swapchain,
-    ash::khr,
+    ash::{ext, khr},
     command_buffer::CommandBuffer,
     error::Error,
     swapchain::SwapchainCreateInfo,
     sync::{Fence, Semaphore},
-    vk::{self},
+    vk,
 };
 use winit::raw_window_handle::RawWindowHandle;
 
 pub struct Renderer {
-    device: Arc<Device>,
+    _instance: Instance,
+    pub device: Arc<Device>,
     surface: Arc<Surface>,
-    swapchain: Swapchain,
+    pub swapchain: Swapchain,
 
     frames: Vec<FrameData>,
     frame_idx: usize,
@@ -47,7 +48,16 @@ impl Renderer {
     pub fn new(window_handle: RawWindowHandle) -> Result<Self, Error> {
         let instance = Instance::new()?;
         let surface = Surface::new(&instance, window_handle)?;
-        let device = Device::new(&instance, &[khr::swapchain::NAME])?;
+        let device = Device::new(
+            &instance,
+            &[
+                khr::swapchain::NAME,
+                ext::descriptor_heap::NAME,
+                khr::maintenance5::NAME,
+                ext::pageable_device_local_memory::NAME,
+                ext::memory_priority::NAME,
+            ],
+        )?;
         let swapchain = Swapchain::new(SwapchainCreateInfo {
             instance: &instance,
             device: device.clone(),
@@ -63,6 +73,7 @@ impl Renderer {
         }
 
         Ok(Self {
+            _instance: instance,
             device,
             surface,
             swapchain,
@@ -89,6 +100,10 @@ impl Renderer {
             &image,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            vk::AccessFlags2::NONE,
+            vk::AccessFlags2::TRANSFER_WRITE,
+            vk::PipelineStageFlags2::ALL_COMMANDS,
+            vk::PipelineStageFlags2::ALL_TRANSFER,
         );
         unsafe {
             self.device.handle().cmd_clear_color_image(
@@ -110,6 +125,10 @@ impl Renderer {
             &image,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             vk::ImageLayout::PRESENT_SRC_KHR,
+            vk::AccessFlags2::TRANSFER_WRITE,
+            vk::AccessFlags2::NONE,
+            vk::PipelineStageFlags2::ALL_TRANSFER,
+            vk::PipelineStageFlags2::TOP_OF_PIPE,
         );
         command_buffer.end()?;
 

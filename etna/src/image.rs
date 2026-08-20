@@ -134,6 +134,10 @@ impl Image {
             self,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            vk::AccessFlags2::NONE,
+            vk::AccessFlags2::TRANSFER_WRITE,
+            vk::PipelineStageFlags2::ALL_TRANSFER,
+            vk::PipelineStageFlags2::ALL_TRANSFER,
         );
         command_buffer.copy_buffer_to_image(&buffer, self);
         command_buffer.end()?;
@@ -189,11 +193,19 @@ impl CommandBuffer {
         image: &Image,
         old_layout: vk::ImageLayout,
         new_layout: vk::ImageLayout,
+        src_access_mask: vk::AccessFlags2,
+        dst_access_mask: vk::AccessFlags2,
+        src_stage_mask: vk::PipelineStageFlags2,
+        dst_stage_mask: vk::PipelineStageFlags2,
     ) {
         let image_memory_barrier = vk::ImageMemoryBarrier2::default()
+            .dst_access_mask(dst_access_mask)
+            .dst_stage_mask(dst_stage_mask)
             .image(image.handle())
             .new_layout(new_layout)
             .old_layout(old_layout)
+            .src_access_mask(src_access_mask)
+            .src_stage_mask(src_stage_mask)
             .subresource_range(
                 vk::ImageSubresourceRange::default()
                     .aspect_mask(vk::ImageAspectFlags::COLOR)
