@@ -397,8 +397,16 @@ impl EguiRenderer {
         match &delta.image {
             egui::ImageData::Color(image) => {
                 let data: Vec<u8> = image.pixels.iter().flat_map(|p| p.to_array()).collect();
-                if let Some(_pos) = delta.pos {
-                    // partial update — copy into existing image at `pos`
+                if let Some(pos) = delta.pos {
+                    let existing = self
+                        .images
+                        .get_mut(&id)
+                        .expect("partial texture update for unknown TextureId");
+                    existing.upload_region(
+                        &data,
+                        [pos[0] as u32, pos[1] as u32],
+                        [image.width() as u32, image.height() as u32],
+                    )?;
                 } else {
                     let image = self.device.create_image_and_upload(
                         image.width() as u32,
