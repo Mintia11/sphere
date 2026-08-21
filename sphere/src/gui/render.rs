@@ -354,7 +354,6 @@ impl EguiRenderer {
             );
 
             for cmd in &draw_cmds {
-                // scissor from cmd.clip_rect (finally using it correctly)
                 let scissor =
                     clip_rect_to_scissor(cmd.clip_rect, data.pixels_per_point, image.extent());
                 self.device
