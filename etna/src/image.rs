@@ -172,6 +172,67 @@ impl Image {
         Ok(())
     }
 
+    pub fn upload_region(
+        &mut self,
+        data: &[u8],
+        offset: [u32; 2],
+        extent: [u32; 2],
+    ) -> Result<(), Error> {
+        let buffer = self.device.create_and_upload_buffer(
+            data,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            MemoryLocation::CpuToGpu,
+        )?;
+
+        let command_buffer = self.device.allocate_transfer_command_buffer()?;
+        command_buffer.begin()?;
+        command_buffer.buffer_pipeline_barrier(
+            &buffer,
+            vk::AccessFlags2::NONE,
+            vk::AccessFlags2::TRANSFER_READ,
+            vk::PipelineStageFlags2::NONE,
+            vk::PipelineStageFlags2::COPY,
+        );
+
+        let (src_access_mask, src_stage_mask) = match self.current_layout() {
+            vk::ImageLayout::UNDEFINED => {
+                (vk::AccessFlags2::NONE, vk::PipelineStageFlags2::TOP_OF_PIPE)
+            }
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL => (
+                vk::AccessFlags2::TRANSFER_WRITE,
+                vk::PipelineStageFlags2::ALL_TRANSFER,
+            ),
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL => (
+                vk::AccessFlags2::SHADER_READ,
+                vk::PipelineStageFlags2::FRAGMENT_SHADER,
+            ),
+            other => panic!("upload_region: unexpected image layout {other:?}"),
+        };
+
+        command_buffer.image_pipeline_barrier(
+            self,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            src_access_mask,
+            vk::AccessFlags2::TRANSFER_WRITE,
+            src_stage_mask,
+            vk::PipelineStageFlags2::ALL_TRANSFER,
+        );
+        command_buffer.copy_buffer_to_image_region(&buffer, self, offset, extent);
+        command_buffer.end()?;
+
+        let submit_fence = self.device.create_fence(false)?;
+        self.device.submit_queue(
+            self.device.transfer_queue(),
+            &command_buffer,
+            None,
+            None,
+            Some(&submit_fence),
+        )?;
+        submit_fence.wait(u64::MAX)?;
+
+        Ok(())
+    }
+
     pub fn handle(&self) -> vk::Image {
         self.image
     }
@@ -214,6 +275,48 @@ impl CommandBuffer {
             self.device
                 .handle()
                 .cmd_copy_buffer_to_image2(self.handle(), &copy_buffer_to_image_info);
+        }
+    }
+
+    pub fn copy_buffer_to_image_region(
+        &self,
+        from: &Buffer,
+        to: &mut Image,
+        offset: [u32; 2],
+        extent: [u32; 2],
+    ) {
+        let region = vk::BufferImageCopy2::default()
+            .buffer_image_height(0)
+            .buffer_offset(0)
+            .buffer_row_length(0)
+            .image_offset(vk::Offset3D {
+                x: offset[0] as i32,
+                y: offset[1] as i32,
+                z: 0,
+            })
+            .image_extent(vk::Extent3D {
+                width: extent[0],
+                height: extent[1],
+                depth: 1,
+            })
+            .image_subresource(
+                vk::ImageSubresourceLayers::default()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_array_layer(0)
+                    .layer_count(1)
+                    .mip_level(0),
+            );
+
+        let copy_info = vk::CopyBufferToImageInfo2::default()
+            .dst_image(to.handle())
+            .dst_image_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .regions(std::slice::from_ref(&region))
+            .src_buffer(from.handle());
+
+        unsafe {
+            self.device
+                .handle()
+                .cmd_copy_buffer_to_image2(self.handle(), &copy_info);
         }
     }
 
