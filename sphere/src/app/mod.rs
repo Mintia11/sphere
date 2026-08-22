@@ -32,6 +32,31 @@ pub struct App {
     track_info_open: bool,
 }
 
+impl App {
+    pub fn init_decoders(
+        demuxer: &dyn Demuxer,
+        decoders: &mut HashMap<TrackId, Box<dyn PacketDecoder>>,
+        renderer: &Renderer,
+    ) {
+        decoders.clear();
+
+        for track in demuxer.tracks() {
+            let decoder: Option<Box<dyn PacketDecoder>> = match track.codec {
+                CodecId::H264 => Some(Box::new(H264Decoder::new(&renderer.device))),
+                _ => None,
+            };
+
+            if let Some(mut decoder) = decoder {
+                decoder
+                    .track(track)
+                    .expect("Failed to give track to decoder");
+
+                decoders.insert(track.id, decoder);
+            }
+        }
+    }
+}
+
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         self.window = Some(
@@ -51,6 +76,14 @@ impl ApplicationHandler for App {
 
         let renderer = self.renderer.as_ref().unwrap();
         self.ctx = Some(EguiContext::new(&renderer.device, &renderer.swapchain));
+
+        let file = std::env::args().nth(1);
+        if let Some(file) = file {
+            self.demuxer = open_demuxer(file);
+            if let Some(demuxer) = self.demuxer.as_deref() {
+                Self::init_decoders(demuxer, &mut self.decoders, renderer);
+            }
+        }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -86,26 +119,8 @@ impl ApplicationHandler for App {
                                 self.demuxer = open_demuxer(file);
                             }
 
-                            if let Some(demuxer) = &self.demuxer {
-                                self.decoders.clear();
-
-                                for track in demuxer.tracks() {
-                                    let decoder: Option<Box<dyn PacketDecoder>> = match track.codec
-                                    {
-                                        CodecId::H264 => {
-                                            Some(Box::new(H264Decoder::new(&renderer.device)))
-                                        }
-                                        _ => None,
-                                    };
-
-                                    if let Some(mut decoder) = decoder {
-                                        decoder
-                                            .track(track)
-                                            .expect("Failed to give track to decoder");
-
-                                        self.decoders.insert(track.id, decoder);
-                                    }
-                                }
+                            if let Some(demuxer) = self.demuxer.as_deref() {
+                                Self::init_decoders(demuxer, &mut self.decoders, renderer);
                             }
                         }
                         MenuAction::Quit => event_loop.exit(),
