@@ -154,6 +154,8 @@ impl Swapchain {
     }
 
     pub fn recreate(&mut self) -> Result<(), Error> {
+        unsafe { self.device.handle().device_wait_idle()? };
+
         let formats = self.surface.available_formats(self.physical_device)?;
         let chosen_format = formats
             .iter()

@@ -366,11 +366,12 @@ impl Drop for Image {
         if let Some(allocation) = self.allocation.take() {
             let mut allocator = self.device.allocator().lock().unwrap();
             let _ = allocator.free(allocation);
-        }
 
-        unsafe {
-            self.device.handle().destroy_image_view(self.view, None);
-            self.device.handle().destroy_image(self.image, None);
+            // if the image hasn't got an allocation it's probably a swapchain image so don't destroy it
+            unsafe {
+                self.device.handle().destroy_image_view(self.view, None);
+                self.device.handle().destroy_image(self.image, None);
+            }
         }
     }
 }
