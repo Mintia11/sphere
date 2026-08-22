@@ -38,11 +38,15 @@ pub struct Packet {
 }
 
 pub trait PacketDecoder {
-    fn can_decode_track(&self, track: &TrackInfo) -> Result<bool, Error>;
+    fn track(&mut self, track: &TrackInfo) -> Result<(), Error>;
+    fn can_decode_track(&self) -> Result<bool, Error>;
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Cannot decode track, reason: {0}")]
-    CannotDecodeTrack(String),
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("Encountered invalid data: {0}")]
+    InvalidData(String),
 }
