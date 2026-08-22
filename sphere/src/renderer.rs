@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use etna::{
     Device, Image, Instance, Surface, Swapchain,
-    ash::{ext, khr},
     command_buffer::CommandBuffer,
     error::Error,
     swapchain::SwapchainCreateInfo,
@@ -14,7 +13,6 @@ use winit::raw_window_handle::RawWindowHandle;
 pub struct Renderer {
     _instance: Instance,
     pub device: Arc<Device>,
-    surface: Arc<Surface>,
     pub swapchain: Swapchain,
 
     frames: Vec<FrameData>,
@@ -67,7 +65,6 @@ impl Renderer {
         Ok(Self {
             _instance: instance,
             device,
-            surface,
             swapchain,
             frames,
             current_image: None,

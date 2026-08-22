@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use egui::{ClippedPrimitive, Context, FullOutput, TexturesDelta, Ui};
+use egui::{ClippedPrimitive, Context, TexturesDelta, Ui};
 use etna::{Device, Swapchain};
 use winit::window::Window;
 
