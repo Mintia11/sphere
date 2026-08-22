@@ -2,7 +2,10 @@
 
 use bytes::Bytes;
 
-use crate::{time::Timestamp, track::TrackId};
+use crate::{
+    time::Timestamp,
+    track::{TrackId, TrackInfo},
+};
 
 bitflags::bitflags! {
     /// Flags associated with a packet, indicating its properties.
@@ -32,4 +35,14 @@ pub struct Packet {
     pub data: Bytes,
     /// Flags associated with the packet.
     pub flags: PacketFlags,
+}
+
+pub trait PacketDecoder {
+    fn can_decode_track(&self, track: &TrackInfo) -> Result<bool, Error>;
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("Cannot decode track, reason: {0}")]
+    CannotDecodeTrack(String),
 }
