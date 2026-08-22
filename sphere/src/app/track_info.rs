@@ -17,7 +17,7 @@ pub fn window(
 
                 if let Some(decoder) = decoders.get(&track.id) {
                     for info_string in decoder.info_strings() {
-                        ui.label(info_string);
+                        ui.label(format!("\t{}", info_string));
                     }
                 }
             }
