@@ -9,6 +9,7 @@ use common::{
     byte_io::{ByteRead, ByteReader},
     packet::Error,
 };
+use etna::vk;
 
 use crate::nal::RawNal;
 
@@ -30,7 +31,6 @@ pub struct Avcc {
 
 impl Avcc {
     pub fn parse(bytes: &Bytes) -> Result<Self, Error> {
-        println!("{bytes:x?}");
         let reader = ByteReader::new(bytes);
         let mut reader = BitReader::new(reader);
 
@@ -116,17 +116,34 @@ impl Avcc {
             }),
         }
     }
+
+    pub fn bit_depth_luma(&self) -> vk::VideoComponentBitDepthFlagsKHR {
+        match self.bit_depth_luma {
+            8 => vk::VideoComponentBitDepthFlagsKHR::TYPE_8,
+            10 => vk::VideoComponentBitDepthFlagsKHR::TYPE_10,
+            12 => vk::VideoComponentBitDepthFlagsKHR::TYPE_12,
+            _ => vk::VideoComponentBitDepthFlagsKHR::INVALID,
+        }
+    }
+
+    pub fn bit_depth_chroma(&self) -> vk::VideoComponentBitDepthFlagsKHR {
+        match self.bit_depth_chroma {
+            8 => vk::VideoComponentBitDepthFlagsKHR::TYPE_8,
+            10 => vk::VideoComponentBitDepthFlagsKHR::TYPE_10,
+            12 => vk::VideoComponentBitDepthFlagsKHR::TYPE_12,
+            _ => vk::VideoComponentBitDepthFlagsKHR::INVALID,
+        }
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
+#[repr(u32)]
 pub enum Profile {
-    Baseline,
-    ConstrainedBaseline,
-    High,
+    High = 100,
 }
 
 impl Profile {
-    pub fn parse(profile: u8, profile_compatibility: u8) -> Profile {
+    pub fn parse(profile: u8, _profile_compatibility: u8) -> Profile {
         match profile {
             100 => Profile::High,
             _ => todo!("unknown profile: {profile}"),
@@ -134,6 +151,13 @@ impl Profile {
     }
 }
 
+impl From<Profile> for vk::native::StdVideoH264ProfileIdc {
+    fn from(value: Profile) -> Self {
+        value as vk::native::StdVideoH264ProfileIdc
+    }
+}
+
+#[derive(Clone, Copy)]
 pub struct Level(u8, u8);
 
 impl Level {
@@ -154,4 +178,15 @@ pub enum ChromaFormat {
     Yuv420,
     Yuv422,
     Yuv444,
+}
+
+impl From<ChromaFormat> for vk::VideoChromaSubsamplingFlagsKHR {
+    fn from(value: ChromaFormat) -> Self {
+        match value {
+            ChromaFormat::Monochrome => vk::VideoChromaSubsamplingFlagsKHR::MONOCHROME,
+            ChromaFormat::Yuv420 => vk::VideoChromaSubsamplingFlagsKHR::TYPE_420,
+            ChromaFormat::Yuv422 => vk::VideoChromaSubsamplingFlagsKHR::TYPE_422,
+            ChromaFormat::Yuv444 => vk::VideoChromaSubsamplingFlagsKHR::TYPE_444,
+        }
+    }
 }

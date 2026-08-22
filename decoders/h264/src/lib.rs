@@ -4,7 +4,10 @@ use common::{
     packet::{Error, PacketDecoder},
     track::TrackInfo,
 };
-use etna::Device;
+use etna::{
+    Device,
+    vk::{self, TaggedStructure},
+};
 
 use crate::avcc::Avcc;
 
@@ -54,6 +57,41 @@ impl PacketDecoder for H264Decoder {
     }
 
     fn can_decode_track(&self) -> Result<bool, Error> {
-        Ok(true)
+        if let Some(config) = &self.config {
+            let mut profile_h264 = vk::VideoDecodeH264ProfileInfoKHR::default()
+                .std_profile_idc(config.profile.into())
+                .picture_layout(vk::VideoDecodeH264PictureLayoutFlagsKHR::PROGRESSIVE);
+
+            let profile = vk::VideoProfileInfoKHR::default()
+                .chroma_bit_depth(config.bit_depth_chroma())
+                .chroma_subsampling(config.chroma_format.into())
+                .luma_bit_depth(config.bit_depth_luma())
+                .video_codec_operation(vk::VideoCodecOperationFlagsKHR::DECODE_H264)
+                .push(&mut profile_h264);
+
+            let mut h264_capabilities = vk::VideoDecodeH264CapabilitiesKHR::default();
+            let mut decode_capabilities = vk::VideoDecodeCapabilitiesKHR::default();
+            let mut capabilities = vk::VideoCapabilitiesKHR::default()
+                .push(&mut decode_capabilities)
+                .push(&mut h264_capabilities);
+
+            unsafe {
+                self.device
+                    .video_queue_instance_ext()
+                    .get_physical_device_video_capabilities(
+                        self.device.physical_device(),
+                        &profile,
+                        &mut capabilities,
+                    )?;
+            }
+
+            println!("{capabilities:#?}");
+            println!("{decode_capabilities:#?}");
+            println!("{h264_capabilities:#?}");
+
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 }
