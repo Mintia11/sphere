@@ -41,6 +41,7 @@ pub trait PacketDecoder {
     fn track(&mut self, track: &TrackInfo) -> Result<(), Error>;
     fn can_decode_track(&self) -> Result<bool, Error>;
     fn info_strings(&self) -> Vec<String>;
+    fn start_decode_session(&mut self) -> Result<(), Error>;
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -53,4 +54,7 @@ pub enum Error {
 
     #[error("Vulkan error: {0}")]
     VulkanError(#[from] etna::vk::Result),
+
+    #[error("Etna error: {0}")]
+    EtnaError(#[from] etna::error::Error),
 }
