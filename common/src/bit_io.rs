@@ -99,4 +99,12 @@ impl<T: ByteRead> BitReader<T> {
     pub fn bits_left(&self) -> u32 {
         self.bits_left
     }
+
+    pub fn inner_mut(&mut self) -> &mut T {
+        &mut self.reader
+    }
+
+    pub fn eof(&self) -> bool {
+        self.eof
+    }
 }

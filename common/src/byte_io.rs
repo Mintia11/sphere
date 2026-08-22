@@ -88,6 +88,12 @@ impl<T: AsRef<[u8]>> ByteReader<T> {
     }
 }
 
+impl<T: AsRef<[u8]> + ?Sized> ByteReader<T> {
+    pub fn inner(&self) -> &T {
+        &self.inner
+    }
+}
+
 impl<T: AsRef<[u8]> + ?Sized> Read for ByteReader<T> {
     /// Reads bytes from the underlying byte slice into the provided buffer, returning the number of bytes read.
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
