@@ -24,6 +24,9 @@ pub struct Device {
     device: ash::Device,
     allocator: Mutex<Allocator>,
 
+    video_queue_ext: khr::video_queue::Device,
+    video_decode_queue_ext: khr::video_decode_queue::Device,
+
     graphics_queue: Queue,
     decode_queue: Queue,
 }
@@ -86,8 +89,14 @@ impl Device {
 
         Ok(Arc::new(Device {
             physical_device,
-            device,
+            device: device.clone(),
             allocator: Mutex::new(allocator),
+
+            video_queue_ext: khr::video_queue::Device::load(instance.handle(), &device),
+            video_decode_queue_ext: khr::video_decode_queue::Device::load(
+                instance.handle(),
+                &device,
+            ),
 
             graphics_queue,
             decode_queue,
@@ -116,6 +125,14 @@ impl Device {
 
     pub fn decode_queue(&self) -> &Queue {
         &self.decode_queue
+    }
+
+    pub fn video_queue_ext(&self) -> &khr::video_queue::Device {
+        &self.video_queue_ext
+    }
+
+    pub fn video_decode_queue_ext(&self) -> &khr::video_decode_queue::Device {
+        &self.video_decode_queue_ext
     }
 
     pub fn submit_queue(
