@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
 use common::{
-    bit_io::BitReader,
-    byte_io::ByteReader,
     packet::{Error, PacketDecoder},
     track::TrackInfo,
 };
@@ -11,15 +9,18 @@ use etna::Device;
 use crate::avcc::Avcc;
 
 mod avcc;
+mod nal;
 
 pub struct H264Decoder {
     device: Arc<Device>,
+    config: Option<Avcc>,
 }
 
 impl H264Decoder {
     pub fn new(device: &Arc<Device>) -> Self {
         Self {
             device: device.clone(),
+            config: None,
         }
     }
 }
@@ -30,10 +31,8 @@ impl PacketDecoder for H264Decoder {
             "Track has no codec private data".to_string(),
         ))?;
 
-        let reader = ByteReader::new(private_data);
-        let mut reader = BitReader::new(reader);
-
-        let avcc = Avcc::parse(&mut reader)?;
+        let avcc = Avcc::parse(private_data)?;
+        self.config = Some(avcc);
 
         Ok(())
     }
