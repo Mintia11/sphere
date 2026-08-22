@@ -74,7 +74,7 @@ impl Buffer {
     pub fn upload(&mut self, data: &[u8]) -> Result<(), Error> {
         // if the buffer is `HOST_VISIBLE` just copy into it
         if let Some(slice) = self.as_mut_slice() {
-            slice.copy_from_slice(data);
+            slice[..data.len()].copy_from_slice(data);
             return Ok(());
         }
 
