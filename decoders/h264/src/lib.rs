@@ -37,7 +37,23 @@ impl PacketDecoder for H264Decoder {
         Ok(())
     }
 
+    fn info_strings(&self) -> Vec<String> {
+        let mut info_strings = Vec::new();
+        if let Some(config) = &self.config {
+            info_strings.push(format!(
+                "Profile: {:?} (Level: {:?})",
+                config.profile, config.level
+            ));
+            info_strings.push(format!(
+                "Chroma Format: {:?} (Luma bits: {}, Chroma bits: {})",
+                config.chroma_format, config.bit_depth_luma, config.bit_depth_chroma
+            ));
+        }
+
+        info_strings
+    }
+
     fn can_decode_track(&self) -> Result<bool, Error> {
-        Ok(false)
+        Ok(true)
     }
 }

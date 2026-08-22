@@ -14,18 +14,18 @@ use crate::nal::RawNal;
 
 #[derive(Debug)]
 pub struct Avcc {
-    profile: Profile,
-    level: Level,
-    lenght_size: u64,
+    pub profile: Profile,
+    pub level: Level,
+    pub lenght_size: u64,
 
-    sps: Vec<RawNal>,
-    pps: Vec<RawNal>,
+    pub sps: Vec<RawNal>,
+    pub pps: Vec<RawNal>,
 
-    chroma_format: ChromaFormat,
-    bit_depth_luma: usize,
-    bit_depth_chroma: usize,
+    pub chroma_format: ChromaFormat,
+    pub bit_depth_luma: usize,
+    pub bit_depth_chroma: usize,
 
-    sps_ext: Vec<RawNal>,
+    pub sps_ext: Vec<RawNal>,
 }
 
 impl Avcc {

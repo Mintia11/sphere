@@ -51,7 +51,11 @@ impl App {
                     .track(track)
                     .expect("Failed to give track to decoder");
 
-                decoders.insert(track.id, decoder);
+                if let Ok(true) = decoder.can_decode_track() {
+                    decoders.insert(track.id, decoder);
+                } else {
+                    println!("Cannot decode track {} using selected decoder", track.id);
+                }
             }
         }
     }
@@ -131,7 +135,7 @@ impl ApplicationHandler for App {
                         ui.label("Hello world!");
 
                         if self.track_info_open {
-                            track_info::window(ui, self.demuxer.as_deref());
+                            track_info::window(ui, self.demuxer.as_deref(), &self.decoders);
                         }
                     });
                 });

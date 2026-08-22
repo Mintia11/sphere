@@ -40,6 +40,7 @@ pub struct Packet {
 pub trait PacketDecoder {
     fn track(&mut self, track: &TrackInfo) -> Result<(), Error>;
     fn can_decode_track(&self) -> Result<bool, Error>;
+    fn info_strings(&self) -> Vec<String>;
 }
 
 #[derive(Debug, thiserror::Error)]
