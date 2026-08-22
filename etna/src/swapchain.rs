@@ -112,7 +112,12 @@ impl Swapchain {
             .swapchains(std::slice::from_ref(swapchain))
             .wait_semaphores(std::slice::from_ref(&semaphore));
 
-        let is_suboptimal = unsafe { self.ext.queue_present(queue.handle(), &present_info)? };
+        let result = unsafe { self.ext.queue_present(queue.handle(), &present_info) };
+
+        let Ok(is_suboptimal) = result else {
+            self.recreate()?;
+            return Ok(());
+        };
 
         if results[0] != vk::Result::SUCCESS {
             return Err(results[0].into());
@@ -148,7 +153,7 @@ impl Swapchain {
         self.current_idx as usize
     }
 
-    fn recreate(&mut self) -> Result<(), Error> {
+    pub fn recreate(&mut self) -> Result<(), Error> {
         let formats = self.surface.available_formats(self.physical_device)?;
         let chosen_format = formats
             .iter()

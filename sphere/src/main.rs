@@ -1,4 +1,5 @@
 use winit::application::ApplicationHandler;
+use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::raw_window_handle::HasWindowHandle;
@@ -22,7 +23,11 @@ impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         self.window = Some(
             event_loop
-                .create_window(Window::default_attributes().with_title("Sphere Video Player"))
+                .create_window(
+                    Window::default_attributes()
+                        .with_title("Sphere Video Player")
+                        .with_inner_size(LogicalSize::new(1366.0, 768.0)),
+                )
                 .unwrap(),
         );
 
@@ -43,9 +48,25 @@ impl ApplicationHandler for App {
                 println!("The close button was pressed; stopping");
                 event_loop.exit();
             }
+            WindowEvent::Resized(_) => {
+                let renderer = self.renderer.as_mut().unwrap();
+                renderer
+                    .swapchain
+                    .recreate()
+                    .expect("Failed to recreate swapchain");
+            }
             WindowEvent::RedrawRequested => {
                 let ctx = self.ctx.as_mut().unwrap();
                 let data = ctx.run_ui(self.window.as_ref().unwrap(), |ui| {
+                    egui::menu::MenuBar::default().ui(ui, |ui| {
+                        ui.menu_button("File", |ui| {
+                            if ui.button("Open").clicked() {}
+                            if ui.button("Quit").clicked() {
+                                std::process::exit(0);
+                            }
+                        });
+                    });
+
                     egui::CentralPanel::default().show(ui, |ui| {
                         ui.label("Hello world!");
                         if ui.button("Click me").clicked() {
