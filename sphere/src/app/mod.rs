@@ -1,9 +1,4 @@
-use std::collections::HashMap;
-
-use common::demuxer::Demuxer;
-use common::packet::PacketDecoder;
-use common::track::{CodecId, TrackId};
-use h264::H264Decoder;
+use egui::{Align, Layout, Widget};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
@@ -13,11 +8,13 @@ use winit::window::{Window, WindowId};
 
 use crate::app::file_ops::open_demuxer;
 use crate::app::menu_bar::MenuAction;
+use crate::app::playback::Playback;
 use crate::gui::EguiContext;
 use crate::renderer::Renderer;
 
 mod file_ops;
 mod menu_bar;
+mod playback;
 mod track_info;
 
 #[derive(Default)]
@@ -26,39 +23,9 @@ pub struct App {
     renderer: Option<Renderer>,
     ctx: Option<EguiContext>,
 
-    demuxer: Option<Box<dyn Demuxer>>,
-    decoders: HashMap<TrackId, Box<dyn PacketDecoder>>,
+    playback: Playback,
 
     track_info_open: bool,
-}
-
-impl App {
-    pub fn init_decoders(
-        demuxer: &dyn Demuxer,
-        decoders: &mut HashMap<TrackId, Box<dyn PacketDecoder>>,
-        renderer: &Renderer,
-    ) {
-        decoders.clear();
-
-        for track in demuxer.tracks() {
-            let decoder: Option<Box<dyn PacketDecoder>> = match track.codec {
-                CodecId::H264 => Some(Box::new(H264Decoder::new(&renderer.device))),
-                _ => None,
-            };
-
-            if let Some(mut decoder) = decoder {
-                decoder
-                    .track(track)
-                    .expect("Failed to give track to decoder");
-
-                if let Ok(true) = decoder.can_decode_track() {
-                    decoders.insert(track.id, decoder);
-                } else {
-                    println!("Cannot decode track {} using selected decoder", track.id);
-                }
-            }
-        }
-    }
 }
 
 impl ApplicationHandler for App {
@@ -83,9 +50,11 @@ impl ApplicationHandler for App {
 
         let file = std::env::args().nth(1);
         if let Some(file) = file {
-            self.demuxer = open_demuxer(file);
-            if let Some(demuxer) = self.demuxer.as_deref() {
-                Self::init_decoders(demuxer, &mut self.decoders, renderer);
+            let mut demuxer = open_demuxer(file);
+            if let Some(demuxer) = demuxer.take() {
+                self.playback
+                    .load(demuxer, renderer)
+                    .expect("Failed to load playback");
             }
         }
     }
@@ -106,6 +75,10 @@ impl ApplicationHandler for App {
                     .expect("Failed to recreate swapchain");
             }
             WindowEvent::RedrawRequested => {
+                if self.playback.playing {
+                    self.playback.advance();
+                }
+
                 let window = self.window.as_ref().unwrap();
                 let ctx = self.ctx.as_mut().unwrap();
                 let renderer = self.renderer.as_mut().unwrap();
@@ -120,11 +93,12 @@ impl ApplicationHandler for App {
                                 .pick_file();
 
                             if let Some(file) = file {
-                                self.demuxer = open_demuxer(file);
-                            }
-
-                            if let Some(demuxer) = self.demuxer.as_deref() {
-                                Self::init_decoders(demuxer, &mut self.decoders, renderer);
+                                let mut demuxer = open_demuxer(file);
+                                if let Some(demuxer) = demuxer.take() {
+                                    self.playback
+                                        .load(demuxer, renderer)
+                                        .expect("Failed to load playback");
+                                }
                             }
                         }
                         MenuAction::Quit => event_loop.exit(),
@@ -132,11 +106,26 @@ impl ApplicationHandler for App {
                     }
 
                     egui::CentralPanel::default().show(ui, |ui| {
-                        ui.label("Hello world!");
-
                         if self.track_info_open {
-                            track_info::window(ui, self.demuxer.as_deref(), &self.decoders);
+                            track_info::window(ui, &self.playback);
                         }
+
+                        ui.with_layout(Layout::left_to_right(Align::Max), |ui| {
+                            if ui
+                                .button(if self.playback.playing { "■" } else { ">" })
+                                .clicked()
+                            {
+                                self.playback.toggle_play();
+                            }
+                            let pts = self.playback.current_pts.to_seconds();
+                            ui.label(format!(
+                                "{}:{}:{}",
+                                (pts as u64) / 3600,
+                                ((pts as u64) / 60) % 60,
+                                (pts as u64) % 60
+                            ));
+                            egui::widgets::ProgressBar::new(self.playback.progress()).ui(ui);
+                        })
                     });
                 });
 
