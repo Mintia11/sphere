@@ -17,6 +17,8 @@ pub trait Demuxer {
 
     /// Seeks to a specific timestamp in the specified track.
     fn seek(&mut self, track: TrackId, target: Timestamp) -> Result<(), DemuxingError>;
+
+    fn duration(&self) -> Result<Timestamp, DemuxingError>;
 }
 
 /// An error type for demuxing operations

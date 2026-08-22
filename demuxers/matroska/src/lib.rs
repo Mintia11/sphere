@@ -10,6 +10,7 @@ use common::{
 use crate::{
     cluster::Cluster,
     embl::{EBMLHeader, io::EBMLRead},
+    info::Info,
     segment::Segment,
 };
 
@@ -23,6 +24,7 @@ mod track;
 pub struct MatroskaDemuxer<T: EBMLRead + Seek> {
     reader: T,
 
+    info: Info,
     timebase: TimeBase,
     tracks: Vec<TrackInfo>,
 
@@ -69,6 +71,7 @@ impl<T: EBMLRead + Seek> MatroskaDemuxer<T> {
         Ok(Self {
             reader,
 
+            info: segment.info,
             timebase,
             tracks,
 
@@ -142,5 +145,13 @@ impl<T: EBMLRead + Seek> Demuxer for MatroskaDemuxer<T> {
         self.cluster_index = cluster_idx.or(Some(0));
 
         Ok(())
+    }
+
+    fn duration(&self) -> Result<Timestamp, DemuxingError> {
+        let duration = self.info.duration.ok_or(DemuxingError::InvalidData(
+            "No duration in \\Segment\\Info".to_string(),
+        ))?;
+
+        Ok(Timestamp::new(duration as i64, self.timebase))
     }
 }
