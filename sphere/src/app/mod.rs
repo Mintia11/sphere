@@ -1,4 +1,9 @@
+use std::collections::HashMap;
+
 use common::demuxer::Demuxer;
+use common::packet::PacketDecoder;
+use common::track::{CodecId, TrackId};
+use h264::H264Decoder;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
@@ -22,6 +27,7 @@ pub struct App {
     ctx: Option<EguiContext>,
 
     demuxer: Option<Box<dyn Demuxer>>,
+    decoders: HashMap<TrackId, Box<dyn PacketDecoder>>,
 
     track_info_open: bool,
 }
@@ -65,6 +71,7 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 let window = self.window.as_ref().unwrap();
                 let ctx = self.ctx.as_mut().unwrap();
+                let renderer = self.renderer.as_mut().unwrap();
 
                 let data = ctx.run_ui(self.window.as_ref().unwrap(), |ui| {
                     match menu_bar::menu_bar(ui) {
@@ -77,6 +84,28 @@ impl ApplicationHandler for App {
 
                             if let Some(file) = file {
                                 self.demuxer = open_demuxer(file);
+                            }
+
+                            if let Some(demuxer) = &self.demuxer {
+                                self.decoders.clear();
+
+                                for track in demuxer.tracks() {
+                                    let decoder: Option<Box<dyn PacketDecoder>> = match track.codec
+                                    {
+                                        CodecId::H264 => {
+                                            Some(Box::new(H264Decoder::new(&renderer.device)))
+                                        }
+                                        _ => None,
+                                    };
+
+                                    if let Some(mut decoder) = decoder {
+                                        decoder
+                                            .track(track)
+                                            .expect("Failed to give track to decoder");
+
+                                        self.decoders.insert(track.id, decoder);
+                                    }
+                                }
                             }
                         }
                         MenuAction::Quit => event_loop.exit(),
@@ -92,7 +121,6 @@ impl ApplicationHandler for App {
                     });
                 });
 
-                let renderer = self.renderer.as_mut().unwrap();
                 let (command_buffer, image) = renderer.begin().expect("Failed to begin rendering");
                 ctx.renderer
                     .draw(command_buffer, &image, data)
