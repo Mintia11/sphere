@@ -830,6 +830,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "h264"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "etna",
+]
+
+[[package]]
 name = "harfrust"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

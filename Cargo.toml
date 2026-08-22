@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["common", "demuxers/matroska", "etna", "sphere"]
+members = ["common", "decoders/h264", "demuxers/matroska", "etna", "sphere"]
 
 [workspace.dependencies]
 bitflags = "2.13.1"
