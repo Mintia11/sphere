@@ -24,8 +24,16 @@ impl TimeBase {
     }
 }
 
+impl Default for TimeBase {
+    /// Defaults to 1/1 (i.e. whole seconds), since 0 in either field would
+    /// make the timebase meaningless or cause a division by zero in `rescale`.
+    fn default() -> Self {
+        TimeBase { num: 1, den: 1 }
+    }
+}
+
 /// A timestamp represents a point in time, expressed in a specific timebase.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Timestamp {
     /// The value of the timestamp in the units of the timebase.
     pub value: i64,
