@@ -25,6 +25,8 @@ pub struct Device {
     allocator: Mutex<Allocator>,
 
     video_queue_ext: khr::video_queue::Device,
+    video_queue_instance_ext: khr::video_queue::Instance,
+
     video_decode_queue_ext: khr::video_decode_queue::Device,
 
     graphics_queue: Queue,
@@ -93,6 +95,10 @@ impl Device {
             allocator: Mutex::new(allocator),
 
             video_queue_ext: khr::video_queue::Device::load(instance.handle(), &device),
+            video_queue_instance_ext: khr::video_queue::Instance::load(
+                instance.entry(),
+                instance.handle(),
+            ),
             video_decode_queue_ext: khr::video_decode_queue::Device::load(
                 instance.handle(),
                 &device,
@@ -129,6 +135,10 @@ impl Device {
 
     pub fn video_queue_ext(&self) -> &khr::video_queue::Device {
         &self.video_queue_ext
+    }
+
+    pub fn video_queue_instance_ext(&self) -> &khr::video_queue::Instance {
+        &self.video_queue_instance_ext
     }
 
     pub fn video_decode_queue_ext(&self) -> &khr::video_decode_queue::Device {
