@@ -25,6 +25,7 @@ pub struct Device {
     allocator: Mutex<Allocator>,
 
     graphics_queue: Queue,
+    decode_queue: Queue,
 }
 
 pub struct Queue {
@@ -40,25 +41,34 @@ impl Device {
             khr::swapchain::NAME,
             ext::pageable_device_local_memory::NAME,
             ext::memory_priority::NAME,
+            khr::video_queue::NAME,
+            khr::video_decode_queue::NAME,
+            khr::video_decode_h264::NAME,
         ]);
 
-        let (physical_device, graphics_queue_family) =
-            pick_physical_device(instance, &device_exts)?;
-        let device = create_device(
-            instance,
-            physical_device,
-            &device_exts,
-            graphics_queue_family,
-        )?;
+        let (physical_device, queue_families) = pick_physical_device(instance, &device_exts)?;
+        let device = create_device(instance, physical_device, &device_exts, queue_families)?;
 
         let graphics_queue = Queue {
-            handle: unsafe { device.get_device_queue(graphics_queue_family, 0) },
-            family_idx: graphics_queue_family,
+            handle: unsafe { device.get_device_queue(queue_families.0, 0) },
+            family_idx: queue_families.0,
             command_pool: unsafe {
                 device.create_command_pool(
                     &vk::CommandPoolCreateInfo::default()
                         .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-                        .queue_family_index(graphics_queue_family),
+                        .queue_family_index(queue_families.0),
+                    None,
+                )?
+            },
+        };
+        let decode_queue = Queue {
+            handle: unsafe { device.get_device_queue(queue_families.1, 0) },
+            family_idx: queue_families.1,
+            command_pool: unsafe {
+                device.create_command_pool(
+                    &vk::CommandPoolCreateInfo::default()
+                        .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+                        .queue_family_index(queue_families.1),
                     None,
                 )?
             },
@@ -77,8 +87,10 @@ impl Device {
         Ok(Arc::new(Device {
             physical_device,
             device,
-            graphics_queue,
             allocator: Mutex::new(allocator),
+
+            graphics_queue,
+            decode_queue,
         }))
     }
 
@@ -100,6 +112,10 @@ impl Device {
 
     pub fn transfer_queue(&self) -> &Queue {
         &self.graphics_queue // todo: maybe create a separate transfer queue to not clog up the graphics one
+    }
+
+    pub fn decode_queue(&self) -> &Queue {
+        &self.decode_queue
     }
 
     pub fn submit_queue(
@@ -165,7 +181,7 @@ impl Queue {
 fn pick_physical_device(
     instance: &Instance,
     device_exts: &[&'static CStr],
-) -> Result<(vk::PhysicalDevice, u32), Error> {
+) -> Result<(vk::PhysicalDevice, (u32, u32)), Error> {
     for physical_device in unsafe { instance.handle().enumerate_physical_devices()? } {
         let extensions = unsafe {
             instance
@@ -203,6 +219,7 @@ fn pick_physical_device(
         }
 
         let mut graphics_queue: Option<u32> = None;
+        let mut decode_queue: Option<u32> = None;
 
         for (i, queue_family) in queue_families.iter().enumerate() {
             let queue_family = queue_family.queue_family_properties;
@@ -210,10 +227,19 @@ fn pick_physical_device(
             if queue_family.queue_flags.contains(vk::QueueFlags::GRAPHICS) {
                 graphics_queue = Some(i as u32);
             }
+
+            if queue_family
+                .queue_flags
+                .contains(vk::QueueFlags::VIDEO_DECODE_KHR)
+            {
+                decode_queue = Some(i as u32);
+            }
         }
 
-        if let Some(graphics_queue) = graphics_queue {
-            return Ok((physical_device, graphics_queue));
+        if let Some(graphics_queue) = graphics_queue
+            && let Some(decode_queue) = decode_queue
+        {
+            return Ok((physical_device, (graphics_queue, decode_queue)));
         }
     }
 
@@ -224,7 +250,7 @@ fn create_device(
     instance: &Instance,
     physical_device: vk::PhysicalDevice,
     device_exts: &[&'static CStr],
-    graphics_queue_family: u32,
+    queue_families: (u32, u32),
 ) -> Result<ash::Device, Error> {
     let mut buffer_device_address =
         vk::PhysicalDeviceBufferDeviceAddressFeatures::default().buffer_device_address(true);
@@ -235,13 +261,17 @@ fn create_device(
     let mut dynamic_rendering =
         vk::PhysicalDeviceDynamicRenderingFeatures::default().dynamic_rendering(true);
 
-    let queue_info = vk::DeviceQueueCreateInfo::default()
-        .queue_family_index(graphics_queue_family)
+    let graphics_queue_info = vk::DeviceQueueCreateInfo::default()
+        .queue_family_index(queue_families.0)
+        .queue_priorities(&[1.0]);
+    let decode_queue_info = vk::DeviceQueueCreateInfo::default()
+        .queue_family_index(queue_families.1)
         .queue_priorities(&[1.0]);
 
+    let queue_infos = [graphics_queue_info, decode_queue_info];
     let exts = device_exts.iter().map(|e| e.as_ptr()).collect::<Vec<_>>();
     let device_info = vk::DeviceCreateInfo::default()
-        .queue_create_infos(std::slice::from_ref(&queue_info))
+        .queue_create_infos(&queue_infos)
         .enabled_extension_names(&exts)
         .push(&mut dynamic_rendering)
         .push(&mut synchronization2)
