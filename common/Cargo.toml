@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 bitflags.workspace = true
 bytes.workspace = true
+etna = { path = "../etna" }
 thiserror.workspace = true
