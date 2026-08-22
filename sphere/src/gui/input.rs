@@ -1,11 +1,24 @@
+use std::time::Instant;
+
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::keyboard::{KeyCode, ModifiersState, PhysicalKey};
 
-#[derive(Default)]
 pub struct EguiInputState {
     pointer_pos: egui::Pos2,
     modifiers: egui::Modifiers,
     events: Vec<egui::Event>,
+    start: Instant,
+}
+
+impl Default for EguiInputState {
+    fn default() -> Self {
+        EguiInputState {
+            pointer_pos: Default::default(),
+            modifiers: Default::default(),
+            events: Default::default(),
+            start: Instant::now(),
+        }
+    }
 }
 
 impl EguiInputState {
@@ -64,13 +77,28 @@ impl EguiInputState {
     }
 
     pub fn take_raw_input(&mut self, window: &winit::window::Window) -> egui::RawInput {
+        let scale = window.scale_factor() as f32;
         let size = window.inner_size();
+
+        let viewport_id = egui::ViewportId::ROOT;
+        let mut viewports = egui::ViewportIdMap::default();
+        viewports.insert(
+            viewport_id,
+            egui::ViewportInfo {
+                native_pixels_per_point: Some(scale),
+                ..Default::default()
+            },
+        );
+
         egui::RawInput {
+            viewport_id,
+            viewports,
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
-                egui::vec2(size.width as f32, size.height as f32) / window.scale_factor() as f32,
+                egui::vec2(size.width as f32, size.height as f32) / scale,
             )),
             events: std::mem::take(&mut self.events),
+            time: Some(self.start.elapsed().as_secs_f64()),
             ..Default::default()
         }
     }
