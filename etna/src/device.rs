@@ -35,7 +35,7 @@ pub struct Device {
 
 pub struct Queue {
     handle: vk::Queue,
-    family_idx: u32,
+    pub family_idx: u32,
     command_pool: vk::CommandPool,
 }
 
