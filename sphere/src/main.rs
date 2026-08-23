@@ -3,6 +3,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use crate::app::App;
 
 mod app;
+mod audio;
 mod gui;
 mod renderer;
 

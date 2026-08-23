@@ -1,4 +1,5 @@
 use egui::{Align, Layout, Widget};
+use etna::vk;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
@@ -75,9 +76,7 @@ impl ApplicationHandler for App {
                     .expect("Failed to recreate swapchain");
             }
             WindowEvent::RedrawRequested => {
-                if self.playback.playing {
-                    self.playback.advance();
-                }
+                self.playback.advance();
 
                 let window = self.window.as_ref().unwrap();
                 let ctx = self.ctx.as_mut().unwrap();

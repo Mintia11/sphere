@@ -6,9 +6,13 @@ edition = "2024"
 [dependencies]
 bytemuck = "1.25.2"
 common = { path = "../common" }
+cpal = "0.18.2"
+crossbeam-channel = "0.5.16"
 egui = "0.36.1"
 etna = { path = "../etna" }
 h264 = { path = "../decoders/h264" }
 matroska = { path = "../demuxers/matroska" }
 rfd = "0.17.2"
+ringbuf = "0.5.1"
+thiserror.workspace = true
 winit = "0.30.13"
