@@ -2,13 +2,17 @@ use common::{bit_io::BitReader, byte_io::ByteRead, packet::Error};
 
 use crate::{
     config::Config,
-    ics::{info::Info, pulse::PulseData, scale_factors::ScaleFactors, section::SectionData},
+    ics::{
+        info::Info, pulse::PulseData, scale_factors::ScaleFactors, section::SectionData,
+        tns::TNSData,
+    },
 };
 
 mod info;
 mod pulse;
 mod scale_factors;
 mod section;
+mod tns;
 
 #[derive(Debug)]
 pub struct Ics {}
@@ -28,6 +32,8 @@ impl Ics {
         let scale_factors = ScaleFactors::parse(reader, global_gain, &info, &section)?;
         let pulse = PulseData::parse(reader, &info)?;
         assert!(pulse.is_none(), "todo: use pulse data");
+        let tns = TNSData::parse(reader)?;
+        assert!(tns.is_none(), "todo: use tns data");
 
         Ok(Self {})
     }
