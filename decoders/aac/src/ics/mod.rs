@@ -2,10 +2,11 @@ use common::{bit_io::BitReader, byte_io::ByteRead, packet::Error};
 
 use crate::{
     config::Config,
-    ics::{info::Info, scale_factors::ScaleFactors, section::SectionData},
+    ics::{info::Info, pulse::PulseData, scale_factors::ScaleFactors, section::SectionData},
 };
 
 mod info;
+mod pulse;
 mod scale_factors;
 mod section;
 
@@ -25,6 +26,8 @@ impl Ics {
         };
         let section = SectionData::parse(reader, &info)?;
         let scale_factors = ScaleFactors::parse(reader, global_gain, &info, &section)?;
+        let pulse = PulseData::parse(reader, &info)?;
+        assert!(pulse.is_none(), "todo: use pulse data");
 
         Ok(Self {})
     }
