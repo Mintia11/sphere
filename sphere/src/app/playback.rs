@@ -128,24 +128,27 @@ impl Playback {
         let demux_handle = {
             let shutdown = shutdown_demux.clone();
             let mut demuxer = demuxer;
-            std::thread::spawn(move || {
-                while !shutdown.load(Ordering::Relaxed) {
-                    match demuxer.read_packet() {
-                        Ok(Some(packet)) => {
-                            if let Some(tx) = packet_txs.get(&packet.track)
-                                && tx.send(packet).is_err()
-                            {
+            std::thread::Builder::new()
+                .name("demuxer".to_string())
+                .spawn(move || {
+                    while !shutdown.load(Ordering::Relaxed) {
+                        match demuxer.read_packet() {
+                            Ok(Some(packet)) => {
+                                if let Some(tx) = packet_txs.get(&packet.track)
+                                    && tx.send(packet).is_err()
+                                {
+                                    break;
+                                }
+                            }
+                            Ok(None) => break,
+                            Err(e) => {
+                                eprintln!("demux error: {e}");
                                 break;
                             }
                         }
-                        Ok(None) => break,
-                        Err(e) => {
-                            eprintln!("demux error: {e}");
-                            break;
-                        }
                     }
-                }
-            })
+                })
+                .unwrap()
         };
         self.decode_threads.push((shutdown_demux, demux_handle));
 
@@ -157,37 +160,40 @@ impl Playback {
             let mut producer = producer; // owned by this thread alone, no sharing needed
             let target_channels = self.audio_output.as_ref().unwrap().channel_count;
 
-            let handle = std::thread::spawn(move || {
-                decoder
-                    .start_decode_session()
-                    .expect("failed to start decode session");
-                while !shutdown_clone.load(Ordering::Relaxed) {
-                    let Ok(packet) = packet_rx.recv_timeout(Duration::from_millis(100)) else {
-                        continue;
-                    };
-                    if decoder.send_packet(packet).is_err() {
-                        break;
-                    }
+            let handle = std::thread::Builder::new()
+                .name("audio frame getter".to_string())
+                .spawn(move || {
+                    decoder
+                        .start_decode_session()
+                        .expect("failed to start decode session");
+                    while !shutdown_clone.load(Ordering::Relaxed) {
+                        let Ok(packet) = packet_rx.recv_timeout(Duration::from_millis(100)) else {
+                            continue;
+                        };
+                        if decoder.send_packet(packet).is_err() {
+                            break;
+                        }
 
-                    let mut interleave_buf = Vec::new();
+                        let mut interleave_buf = Vec::new();
 
-                    while let Ok(Some(Frame::Audio { samples, .. })) = decoder.grab_frame() {
-                        downmix_interleaved(
-                            &samples,
-                            target_channels as usize,
-                            &mut interleave_buf,
-                        );
+                        while let Ok(Some(Frame::Audio { samples, .. })) = decoder.grab_frame() {
+                            downmix_interleaved(
+                                &samples,
+                                target_channels as usize,
+                                &mut interleave_buf,
+                            );
 
-                        let mut offset = 0;
-                        while offset < interleave_buf.len() {
-                            offset += producer.push_slice(&interleave_buf[offset..]);
-                            if offset < interleave_buf.len() {
-                                std::thread::sleep(Duration::from_millis(1));
+                            let mut offset = 0;
+                            while offset < interleave_buf.len() {
+                                offset += producer.push_slice(&interleave_buf[offset..]);
+                                if offset < interleave_buf.len() {
+                                    std::hint::spin_loop();
+                                }
                             }
                         }
                     }
-                }
-            });
+                })
+                .unwrap();
             self.decode_threads.push((shutdown, handle));
         }
 
@@ -201,33 +207,36 @@ impl Playback {
             let shutdown_clone = shutdown.clone();
             let video_tx = video_tx.clone();
 
-            let handle = std::thread::spawn(move || {
-                decoder
-                    .start_decode_session()
-                    .expect("failed to start decode session");
-                track_info
-                    .lock()
-                    .unwrap()
-                    .insert(track_id, decoder.info_strings());
-                while !shutdown_clone.load(Ordering::Relaxed) {
-                    let Ok(packet) = packet_rx.recv_timeout(Duration::from_millis(100)) else {
-                        continue;
-                    };
-                    if decoder.send_packet(packet).is_err() {
-                        break;
-                    }
-                    while let Ok(Some(frame)) = decoder.grab_frame() {
-                        match frame {
-                            Frame::Video { .. } => {
-                                let _ = video_tx.send(frame);
-                            }
-                            Frame::Audio { .. } => {
-                                unreachable!("this thread is a video decoder")
+            let handle = std::thread::Builder::new()
+                .name("video frame getter".to_string())
+                .spawn(move || {
+                    decoder
+                        .start_decode_session()
+                        .expect("failed to start decode session");
+                    track_info
+                        .lock()
+                        .unwrap()
+                        .insert(track_id, decoder.info_strings());
+                    while !shutdown_clone.load(Ordering::Relaxed) {
+                        let Ok(packet) = packet_rx.recv_timeout(Duration::from_millis(100)) else {
+                            continue;
+                        };
+                        if decoder.send_packet(packet).is_err() {
+                            break;
+                        }
+                        while let Ok(Some(frame)) = decoder.grab_frame() {
+                            match frame {
+                                Frame::Video { .. } => {
+                                    let _ = video_tx.send(frame);
+                                }
+                                Frame::Audio { .. } => {
+                                    unreachable!("this thread is a video decoder")
+                                }
                             }
                         }
                     }
-                }
-            });
+                })
+                .unwrap();
             self.decode_threads.push((shutdown, handle));
         }
 
