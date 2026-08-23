@@ -40,14 +40,8 @@ pub struct Packet {
 }
 
 pub enum Frame {
-    Video {
-        image: etna::Image,
-        pts: Timestamp,
-    },
-    Audio {
-        samples: AudioBuffer,
-        pts: Timestamp,
-    },
+    Video { image: etna::Image, pts: Timestamp },
+    Audio { samples: AudioBuffer },
 }
 
 pub trait PacketDecoder: Send {
