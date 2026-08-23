@@ -22,6 +22,7 @@ impl ScaleFactors {
 
         let mut normal = global_gain as i16;
         let mut noise = global_gain as i16 + 10;
+        let mut intensity = 155;
 
         for g in 0..info.window_group_length.len() {
             let mut group_values = vec![];
@@ -43,7 +44,14 @@ impl ScaleFactors {
                         let value = tables::NORMAL_SCF_TABLE[noise as usize];
                         group_values.push(value);
                     }
-                    14 | 15 => todo!("intensity"),
+                    14 | 15 => {
+                        intensity += table.decode(reader)? as i16 - 60;
+
+                        assert!((0..256).contains(&intensity), "intensity out of range");
+
+                        let value = tables::INTENSITY_SCF_TABLE[intensity as usize];
+                        group_values.push(value);
+                    }
                     _ => {
                         normal += table.decode(reader)? as i16 - 60;
                         assert!((0..256).contains(&normal), "normal out of range");

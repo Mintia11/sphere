@@ -104,7 +104,6 @@ impl SpectralData {
                                 out[1] = b;
                             }
                         }
-
                         13 => {
                             let mut state = 0x1F2E3D4Cu32;
                             let mut lcg = || -> i32 {
@@ -123,6 +122,7 @@ impl SpectralData {
                                 *out *= scale_factor;
                             }
                         }
+                        14 | 15 => {}
                         cb => todo!("spectral data decoding for codebook {cb}"),
                     }
                 }

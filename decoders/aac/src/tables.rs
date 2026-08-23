@@ -394,3 +394,11 @@ pub static NORMAL_SCF_TABLE: LazyLock<[f32; 256]> = LazyLock::new(|| {
     }
     table
 });
+
+pub static INTENSITY_SCF_TABLE: LazyLock<[f32; 256]> = LazyLock::new(|| {
+    let mut table = [0.0; 256];
+    for (i, out) in table.iter_mut().enumerate() {
+        *out = 0.5f32.powf(0.25 * f32::from(i as i16 - 155));
+    }
+    table
+});
