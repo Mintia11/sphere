@@ -4,6 +4,7 @@ use bytes::Bytes;
 
 use crate::{
     audio::AudioBuffer,
+    huffman,
     time::Timestamp,
     track::{TrackId, TrackInfo},
 };
@@ -71,4 +72,7 @@ pub enum Error {
 
     #[error("Etna error: {0}")]
     EtnaError(#[from] etna::error::Error),
+
+    #[error("Error while doing huffman decoding: {0}")]
+    HuffmanError(#[from] huffman::Error),
 }
