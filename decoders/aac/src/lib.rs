@@ -1,4 +1,5 @@
 use common::{
+    audio::AudioInfo,
     bit_io::BitReader,
     byte_io::ByteReader,
     packet::{Error, Frame, Packet, PacketDecoder},
@@ -62,5 +63,14 @@ impl PacketDecoder for AacDecoder {
 
     fn grab_frame(&self) -> Result<Option<Frame>, Error> {
         Ok(None)
+    }
+
+    fn audio_info(&self) -> Option<AudioInfo> {
+        let config = self.config?;
+
+        Some(AudioInfo {
+            channel_count: config.channel_configuration.channel_count(),
+            sample_rate: config.sampling_frequency,
+        })
     }
 }
