@@ -6,7 +6,7 @@ use crate::{
 };
 
 pub struct ScaleFactors {
-    groups: Vec<Vec<f32>>,
+    pub groups: Vec<Vec<f32>>,
 }
 
 impl ScaleFactors {

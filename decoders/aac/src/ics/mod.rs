@@ -4,7 +4,7 @@ use crate::{
     config::Config,
     ics::{
         gain_control::GainControl, info::Info, pulse::PulseData, scale_factors::ScaleFactors,
-        section::SectionData, tns::TNSData,
+        section::SectionData, spectral::SpectralData, tns::TNSData,
     },
 };
 
@@ -13,6 +13,7 @@ mod info;
 mod pulse;
 mod scale_factors;
 mod section;
+mod spectral;
 mod tns;
 
 #[derive(Debug)]
@@ -37,6 +38,7 @@ impl Ics {
         assert!(tns.is_none(), "todo: use tns data");
         let gain_control = GainControl::parse(reader)?;
         assert!(gain_control.is_none(), "todo: use gain control");
+        let spectral = SpectralData::parse(reader, &info, &section, &scale_factors)?;
 
         Ok(Self {})
     }
