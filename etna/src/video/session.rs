@@ -1,13 +1,21 @@
 use std::sync::Arc;
 
 use ash::vk;
+use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme};
 
 use crate::{Device, error::Error};
 
 pub struct VideoSession {
     handle: vk::VideoSessionKHR,
+    memory: Vec<Option<Allocation>>,
 
     device: Arc<Device>,
+}
+
+impl VideoSession {
+    pub fn handle(&self) -> vk::VideoSessionKHR {
+        self.handle
+    }
 }
 
 impl Device {
@@ -33,8 +41,48 @@ impl Device {
                 .create_video_session(&session_info, None)?
         };
 
+        let len = unsafe {
+            self.video_queue_ext()
+                .get_video_session_memory_requirements_len(handle)?
+        };
+
+        let mut requirements = vec![vk::VideoSessionMemoryRequirementsKHR::default(); len];
+
+        unsafe {
+            self.video_queue_ext()
+                .get_video_session_memory_requirements(handle, &mut requirements)?;
+        }
+
+        let mut allocator = self.allocator().lock().unwrap();
+        let mut memory = Vec::new();
+        for req in requirements {
+            let alloc_info = AllocationCreateDesc {
+                name: "VideoSessionKHR memory requirement",
+                requirements: req.memory_requirements,
+                location: self.location_for(req.memory_requirements.memory_type_bits),
+                linear: true,
+                allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+            };
+
+            let allocation = allocator.allocate(&alloc_info)?;
+
+            let bind_info = vk::BindVideoSessionMemoryInfoKHR::default()
+                .memory_bind_index(req.memory_bind_index)
+                .memory(unsafe { allocation.memory() })
+                .memory_offset(allocation.offset())
+                .memory_size(req.memory_requirements.size);
+
+            memory.push(Some(allocation));
+
+            unsafe {
+                self.video_queue_ext()
+                    .bind_video_session_memory(handle, &[bind_info])?;
+            }
+        }
+
         Ok(VideoSession {
             handle,
+            memory,
             device: self.clone(),
         })
     }
@@ -46,6 +94,11 @@ impl Drop for VideoSession {
             self.device
                 .video_queue_ext()
                 .destroy_video_session(self.handle, None);
+        }
+
+        let mut allocator = self.device.allocator().lock().unwrap();
+        for allocation in &mut self.memory {
+            allocator.free(allocation.take().unwrap()).unwrap();
         }
     }
 }
