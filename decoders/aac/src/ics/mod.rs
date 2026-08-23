@@ -3,11 +3,12 @@ use common::{bit_io::BitReader, byte_io::ByteRead, packet::Error};
 use crate::{
     config::Config,
     ics::{
-        info::Info, pulse::PulseData, scale_factors::ScaleFactors, section::SectionData,
-        tns::TNSData,
+        gain_control::GainControl, info::Info, pulse::PulseData, scale_factors::ScaleFactors,
+        section::SectionData, tns::TNSData,
     },
 };
 
+mod gain_control;
 mod info;
 mod pulse;
 mod scale_factors;
@@ -34,6 +35,8 @@ impl Ics {
         assert!(pulse.is_none(), "todo: use pulse data");
         let tns = TNSData::parse(reader)?;
         assert!(tns.is_none(), "todo: use tns data");
+        let gain_control = GainControl::parse(reader)?;
+        assert!(gain_control.is_none(), "todo: use gain control");
 
         Ok(Self {})
     }
