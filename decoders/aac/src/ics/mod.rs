@@ -7,6 +7,7 @@ use crate::{
         section::SectionData, spectral::SpectralData, tns::TNSData,
     },
 };
+pub use info::WindowSequence;
 
 mod gain_control;
 mod info;
@@ -17,11 +18,11 @@ mod spectral;
 mod tns;
 
 pub struct Ics {
-    info: Info,
-    pulse: Option<PulseData>,
-    tns: Option<TNSData>,
-    gain_control: Option<GainControl>,
-    spectral: SpectralData,
+    pub info: Info,
+    pub pulse: Option<PulseData>,
+    pub tns: Option<TNSData>,
+    pub gain_control: Option<GainControl>,
+    pub spectral: SpectralData,
 }
 
 impl Ics {

@@ -20,6 +20,7 @@ mod config;
 mod dsp;
 mod ics;
 mod tables;
+mod window;
 
 #[derive(Default)]
 pub struct AacDecoder {
@@ -66,9 +67,12 @@ impl PacketDecoder for AacDecoder {
         let stop = Arc::new(AtomicBool::new(false));
 
         let stop_cb = stop.clone();
-        let handle = std::thread::spawn(move || {
-            run_dsp(stop_cb, recv, send);
-        });
+        let handle = std::thread::Builder::new()
+            .name("aac dsp thread".to_string())
+            .spawn(move || {
+                run_dsp(stop_cb, recv, send);
+            })
+            .unwrap();
 
         self.dsp_thread = Some((stop, handle));
         self.buffers = Some(buffers);
@@ -100,11 +104,12 @@ impl PacketDecoder for AacDecoder {
 
     fn grab_frame(&self) -> Result<Option<Frame>, Error> {
         if let Some(receiver) = &self.buffers {
-            let packet = receiver.recv_timeout(Duration::from_millis(100)).ok();
-            if let Some(samples) = packet {
-                Ok(Some(Frame::Audio { samples }))
-            } else {
-                Ok(None)
+            match receiver.try_recv() {
+                Ok(samples) => Ok(Some(Frame::Audio { samples })),
+                Err(crossbeam_channel::TryRecvError::Empty) => Ok(None),
+                Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                    Err(Error::InvalidData("DSP thread disconnected".to_string()))
+                }
             }
         } else {
             Ok(None)
