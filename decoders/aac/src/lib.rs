@@ -1,11 +1,15 @@
 use common::{
+    bit_io::BitReader,
+    byte_io::ByteReader,
     packet::{Error, Frame, Packet, PacketDecoder},
     track::TrackInfo,
 };
 
-use crate::config::Config;
+use crate::{bitstream::SyntaxElement, config::Config};
 
+mod bitstream;
 mod config;
+mod ics;
 
 #[derive(Default)]
 pub struct AacDecoder {
@@ -39,7 +43,7 @@ impl PacketDecoder for AacDecoder {
     }
 
     fn can_decode_track(&self) -> Result<bool, Error> {
-        Ok(true)
+        Ok(self.config.is_some())
     }
 
     fn start_decode_session(&mut self) -> Result<(), Error> {
@@ -47,6 +51,11 @@ impl PacketDecoder for AacDecoder {
     }
 
     fn send_packet(&mut self, packet: Packet) -> Result<(), Error> {
+        let reader = ByteReader::new(packet.data);
+        let mut reader = BitReader::new(reader);
+
+        let syntax_elements = SyntaxElement::parse_all(&mut reader, self.config.as_ref().unwrap())?;
+
         Ok(())
     }
 
