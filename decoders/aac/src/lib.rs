@@ -1,7 +1,6 @@
 use std::{
     sync::{Arc, atomic::AtomicBool},
     thread::JoinHandle,
-    time::Duration,
 };
 
 use common::{

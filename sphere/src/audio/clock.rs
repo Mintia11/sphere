@@ -20,10 +20,6 @@ impl AudioClock {
         Timestamp::new(samples, TimeBase::new(1, self.sample_rate))
     }
 
-    pub fn reset(&self) {
-        self.samples_played.store(0, Ordering::Relaxed);
-    }
-
     pub fn advance_by_samples(&self, sample_count: usize) {
         self.samples_played
             .fetch_add(sample_count as i64, Ordering::Relaxed);

@@ -381,18 +381,16 @@ static BAND_OFFSETS: [BandInfo; 12] = [
 ];
 
 pub fn find_band_info(sample_rate: u32) -> Option<&'static BandInfo> {
-    for band in BAND_OFFSETS.iter() {
-        if sample_rate >= band.sample_rate {
-            return Some(band);
-        }
-    }
-    None
+    BAND_OFFSETS
+        .iter()
+        .find(|&band| sample_rate >= band.sample_rate)
+        .map(|v| v as _)
 }
 
 pub static NORMAL_SCF_TABLE: LazyLock<[f32; 256]> = LazyLock::new(|| {
     let mut table = [0.0; 256];
-    for i in 0..256 {
-        table[i] = 2.0f32.powf(0.25 * f32::from(i as i16 - 156));
+    for (i, out) in table.iter_mut().enumerate() {
+        *out = 2.0f32.powf(0.25 * f32::from(i as i16 - 156));
     }
     table
 });

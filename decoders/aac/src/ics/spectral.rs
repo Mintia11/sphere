@@ -154,7 +154,7 @@ impl SpectralData {
         }
 
         let (a, b, c, d) = index_to_quad(val);
-        let table = [0.0, scale, 2.51984209978974632953 * scale];
+        let table = [0.0, scale, 2.5198421 * scale];
 
         let mut out = [0.0; 4];
         if a != 0 {

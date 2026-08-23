@@ -54,7 +54,7 @@ impl SyntaxElement {
 
 #[derive(Debug)]
 pub enum ExtensionPayload {
-    FillData { data: Bytes },
+    FillData { _data: Bytes },
 }
 
 impl ExtensionPayload {
@@ -68,7 +68,7 @@ impl ExtensionPayload {
                 for byte in &mut data {
                     *byte = reader.read_bits(8)? as u8;
                 }
-                Ok(ExtensionPayload::FillData { data: data.into() })
+                Ok(ExtensionPayload::FillData { _data: data.into() })
             }
             _ => todo!("Unknown extension type: {}", ext_type),
         }

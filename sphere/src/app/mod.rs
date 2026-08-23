@@ -1,5 +1,4 @@
 use egui::{Align, Layout, Widget};
-use etna::vk;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
