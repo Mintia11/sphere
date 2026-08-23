@@ -16,8 +16,13 @@ mod section;
 mod spectral;
 mod tns;
 
-#[derive(Debug)]
-pub struct Ics {}
+pub struct Ics {
+    info: Info,
+    pulse: Option<PulseData>,
+    tns: Option<TNSData>,
+    gain_control: Option<GainControl>,
+    spectral: SpectralData,
+}
 
 impl Ics {
     pub fn parse<T: ByteRead>(
@@ -40,6 +45,12 @@ impl Ics {
         assert!(gain_control.is_none(), "todo: use gain control");
         let spectral = SpectralData::parse(reader, &info, &section, &scale_factors)?;
 
-        Ok(Self {})
+        Ok(Self {
+            info,
+            pulse,
+            tns,
+            gain_control,
+            spectral,
+        })
     }
 }

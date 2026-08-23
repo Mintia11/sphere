@@ -3,7 +3,6 @@ use common::{bit_io::BitReader, byte_io::ByteRead, packet::Error};
 
 use crate::{config::Config, ics::Ics};
 
-#[derive(Debug)]
 pub enum SyntaxElement {
     SingleChannel { ics: Ics },
     Fill { extension: Option<ExtensionPayload> },

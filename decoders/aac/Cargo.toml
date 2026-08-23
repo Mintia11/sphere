@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 bytes.workspace = true
 common = { path = "../../common" }
+crossbeam-channel = "0.5.16"
 derive-try-from-primitive.workspace = true

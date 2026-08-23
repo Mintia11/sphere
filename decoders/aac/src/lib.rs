@@ -1,21 +1,32 @@
+use std::{
+    sync::{Arc, atomic::AtomicBool},
+    thread::JoinHandle,
+    time::Duration,
+};
+
 use common::{
-    audio::AudioInfo,
+    audio::{AudioBuffer, AudioInfo},
     bit_io::BitReader,
     byte_io::ByteReader,
     packet::{Error, Frame, Packet, PacketDecoder},
     track::TrackInfo,
 };
+use crossbeam_channel::{Receiver, Sender};
 
-use crate::{bitstream::SyntaxElement, config::Config};
+use crate::{bitstream::SyntaxElement, config::Config, dsp::run_dsp, ics::Ics};
 
 mod bitstream;
 mod config;
+mod dsp;
 mod ics;
 mod tables;
 
 #[derive(Default)]
 pub struct AacDecoder {
     config: Option<Config>,
+    buffers: Option<Receiver<AudioBuffer>>,
+    raw_data: Option<Sender<Vec<Ics>>>,
+    dsp_thread: Option<(Arc<AtomicBool>, JoinHandle<()>)>,
 }
 
 impl PacketDecoder for AacDecoder {
@@ -49,6 +60,20 @@ impl PacketDecoder for AacDecoder {
     }
 
     fn start_decode_session(&mut self) -> Result<(), Error> {
+        let (raw_data, recv) = crossbeam_channel::bounded(32);
+        let (send, buffers) = crossbeam_channel::bounded(32);
+
+        let stop = Arc::new(AtomicBool::new(false));
+
+        let stop_cb = stop.clone();
+        let handle = std::thread::spawn(move || {
+            run_dsp(stop_cb, recv, send);
+        });
+
+        self.dsp_thread = Some((stop, handle));
+        self.buffers = Some(buffers);
+        self.raw_data = Some(raw_data);
+
         Ok(())
     }
 
@@ -57,12 +82,33 @@ impl PacketDecoder for AacDecoder {
         let mut reader = BitReader::new(reader);
 
         let syntax_elements = SyntaxElement::parse_all(&mut reader, self.config.as_ref().unwrap())?;
+        for syntax_element in syntax_elements {
+            match syntax_element {
+                SyntaxElement::SingleChannel { ics } => {
+                    if let Some(raw_data) = &self.raw_data {
+                        raw_data.send(vec![ics]).unwrap();
+                    }
+                }
+                SyntaxElement::Fill { extension } => {
+                    let _ = extension;
+                }
+            }
+        }
 
         Ok(())
     }
 
     fn grab_frame(&self) -> Result<Option<Frame>, Error> {
-        Ok(None)
+        if let Some(receiver) = &self.buffers {
+            let packet = receiver.recv_timeout(Duration::from_millis(100)).ok();
+            if let Some(samples) = packet {
+                Ok(Some(Frame::Audio { samples }))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
     }
 
     fn audio_info(&self) -> Option<AudioInfo> {
