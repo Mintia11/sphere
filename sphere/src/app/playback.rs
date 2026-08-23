@@ -10,6 +10,7 @@ use std::{
 
 use aac::AacDecoder;
 use common::{
+    audio::downmix_interleaved,
     demuxer::{Demuxer, DemuxingError},
     packet::{Frame, Packet, PacketDecoder},
     time::Timestamp,
@@ -17,6 +18,7 @@ use common::{
 };
 use etna::Image;
 use h264::H264Decoder;
+use ringbuf::traits::Producer;
 
 use crate::{
     audio::{AudioOutput, clock::AudioClock},
@@ -30,7 +32,7 @@ pub struct Playback {
     pub duration: Timestamp,
     track_info: Arc<Mutex<HashMap<TrackId, Vec<String>>>>,
 
-    audio_clock: Option<Arc<AudioClock>>,
+    audio_clock: Arc<AudioClock>,
     audio_output: Option<AudioOutput>,
 
     video_frame_rx: Option<crossbeam_channel::Receiver<Frame>>,
@@ -49,7 +51,7 @@ impl Default for Playback {
             tracks: Vec::new(),
             track_info: Arc::new(Mutex::new(HashMap::new())),
 
-            audio_clock: None,
+            audio_clock: Arc::new(AudioClock::new(48000)),
             audio_output: None,
 
             video_frame_rx: None,
@@ -94,6 +96,26 @@ impl Playback {
             }
         }
 
+        let (audio_track, audio_decoder) = decoders
+            .iter()
+            .find(|(_, d)| d.audio_info().is_some())
+            .map(|(id, d)| (*id, d))
+            .unzip();
+
+        let audio_producer = if let Some(decoder) = audio_decoder {
+            let audio_info = decoder.audio_info().unwrap();
+
+            self.audio_clock = Arc::new(AudioClock::new(audio_info.sample_rate));
+            let (output, producer) =
+                AudioOutput::new(audio_info.sample_rate, self.audio_clock.clone())
+                    .expect("Failed to create audio output");
+            self.audio_output = Some(output);
+            Some((audio_track.unwrap(), producer))
+        } else {
+            self.audio_output = None;
+            None
+        };
+
         let (packet_txs, mut per_track_rx): (HashMap<TrackId, _>, HashMap<TrackId, _>) = decoders
             .keys()
             .map(|&id| {
@@ -127,6 +149,48 @@ impl Playback {
         };
         self.decode_threads.push((shutdown_demux, demux_handle));
 
+        if let Some((audio_track_id, producer)) = audio_producer {
+            let mut decoder = decoders.remove(&audio_track_id).unwrap();
+            let packet_rx = per_track_rx.remove(&audio_track_id).unwrap();
+            let shutdown = Arc::new(AtomicBool::new(false));
+            let shutdown_clone = shutdown.clone();
+            let mut producer = producer; // owned by this thread alone, no sharing needed
+            let target_channels = self.audio_output.as_ref().unwrap().channel_count;
+
+            let handle = std::thread::spawn(move || {
+                decoder
+                    .start_decode_session()
+                    .expect("failed to start decode session");
+                while !shutdown_clone.load(Ordering::Relaxed) {
+                    let Ok(packet) = packet_rx.recv_timeout(Duration::from_millis(100)) else {
+                        continue;
+                    };
+                    if decoder.send_packet(packet).is_err() {
+                        break;
+                    }
+
+                    let mut interleave_buf = Vec::new();
+
+                    while let Ok(Some(Frame::Audio { samples, .. })) = decoder.grab_frame() {
+                        downmix_interleaved(
+                            &samples,
+                            target_channels as usize,
+                            &mut interleave_buf,
+                        );
+
+                        let mut offset = 0;
+                        while offset < interleave_buf.len() {
+                            offset += producer.push_slice(&interleave_buf[offset..]);
+                            if offset < interleave_buf.len() {
+                                std::thread::sleep(Duration::from_millis(1));
+                            }
+                        }
+                    }
+                }
+            });
+            self.decode_threads.push((shutdown, handle));
+        }
+
         let (video_tx, video_rx) = crossbeam_channel::bounded(4);
         self.video_frame_rx = Some(video_rx);
 
@@ -136,7 +200,6 @@ impl Playback {
             let shutdown = Arc::new(AtomicBool::new(false));
             let shutdown_clone = shutdown.clone();
             let video_tx = video_tx.clone();
-            let audio_clock = self.audio_clock.clone();
 
             let handle = std::thread::spawn(move || {
                 decoder
@@ -148,7 +211,7 @@ impl Playback {
                     .insert(track_id, decoder.info_strings());
                 while !shutdown_clone.load(Ordering::Relaxed) {
                     let Ok(packet) = packet_rx.recv_timeout(Duration::from_millis(100)) else {
-                        continue; // no packet yet, check shutdown flag again
+                        continue;
                     };
                     if decoder.send_packet(packet).is_err() {
                         break;
@@ -158,10 +221,8 @@ impl Playback {
                             Frame::Video { .. } => {
                                 let _ = video_tx.send(frame);
                             }
-                            Frame::Audio { samples, .. } => {
-                                // push into AudioOutput's ring buffer directly, or
-                                // route through another channel if AudioOutput
-                                // isn't Send/shareable across this closure
+                            Frame::Audio { .. } => {
+                                unreachable!("this thread is a video decoder")
                             }
                         }
                     }
@@ -193,10 +254,7 @@ impl Playback {
             return;
         }
 
-        let Some(audio_clock) = &self.audio_clock else {
-            return;
-        };
-        let clock_now = audio_clock.current_time();
+        let clock_now = self.audio_clock.current_time();
 
         loop {
             let (image, pts) = match self.pending_frame.take() {
@@ -227,10 +285,7 @@ impl Playback {
     }
 
     pub fn progress(&mut self) -> f32 {
-        let Some(audio_clock) = &self.audio_clock else {
-            return 0.0;
-        };
-        self.current_pts = audio_clock.current_time();
+        self.current_pts = self.audio_clock.current_time();
 
         let duration_secs = self.duration.to_seconds();
         if duration_secs <= 0.0 {
