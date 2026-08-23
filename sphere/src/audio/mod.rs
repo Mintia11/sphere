@@ -1,9 +1,9 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::{
-    HeapCons, HeapProd, HeapRb,
-    traits::{Consumer, Producer, Split},
+    HeapProd, HeapRb,
+    traits::{Consumer, Split},
 };
 
 use crate::audio::clock::AudioClock;
@@ -11,26 +11,29 @@ use crate::audio::clock::AudioClock;
 pub mod clock;
 
 pub struct AudioOutput {
-    producer: HeapProd<f32>,
-    clock: Arc<AudioClock>,
     stream: cpal::Stream,
+    pub channel_count: u16,
 }
 
 impl AudioOutput {
     pub fn new(
         sample_rate: u32,
-        channels: u16,
         clock: Arc<AudioClock>,
-    ) -> Result<Self, AudioError> {
-        let rb = HeapRb::<f32>::new(sample_rate as usize * channels as usize / 2);
-        let (producer, mut consumer) = rb.split();
-
+    ) -> Result<(Self, HeapProd<f32>), AudioError> {
         let device = cpal::default_host()
             .default_output_device()
             .ok_or(AudioError::NoAudioDevice)?;
-        let config = device.default_output_config()?.config();
 
-        let clock_cb = clock.clone();
+        let channels = device.default_output_config().unwrap().channels();
+        let rb = HeapRb::<f32>::new(sample_rate as usize * channels as usize / 2); // ~500ms
+        let (producer, mut consumer) = rb.split();
+
+        let config = cpal::StreamConfig {
+            channels,
+            sample_rate,
+            buffer_size: cpal::BufferSize::Default,
+        };
+
         let stream = device.build_output_stream(
             config,
             move |output: &mut [f32], _| {
@@ -38,18 +41,19 @@ impl AudioOutput {
                 if filled < output.len() {
                     output[filled..].fill(0.0);
                 }
-                clock_cb.advance_by_samples(filled);
+                clock.advance_by_samples(filled / channels as usize);
             },
             |err| eprintln!("audio stream error: {err}"),
             None,
         )?;
 
-        stream.play()?;
-        Ok(Self {
+        Ok((
+            Self {
+                stream,
+                channel_count: config.channels,
+            },
             producer,
-            clock,
-            stream,
-        })
+        ))
     }
 
     pub fn play(&self) -> Result<(), AudioError> {
@@ -57,10 +61,6 @@ impl AudioOutput {
     }
     pub fn pause(&self) -> Result<(), AudioError> {
         self.stream.pause().map_err(Into::into)
-    }
-
-    pub fn push_samples(&mut self, samples: &[f32]) -> usize {
-        self.producer.push_slice(samples)
     }
 }
 
