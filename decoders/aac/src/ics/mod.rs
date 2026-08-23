@@ -1,8 +1,12 @@
 use common::{bit_io::BitReader, byte_io::ByteRead, packet::Error};
 
-use crate::{config::Config, ics::info::Info};
+use crate::{
+    config::Config,
+    ics::{info::Info, section::SectionData},
+};
 
 mod info;
+mod section;
 
 #[derive(Debug)]
 pub struct Ics {}
@@ -18,6 +22,7 @@ impl Ics {
             Some(info) => info,
             None => Info::parse(reader, config)?,
         };
+        let section = SectionData::parse(reader, &info)?;
 
         Ok(Self {})
     }
