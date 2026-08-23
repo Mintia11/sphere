@@ -6,12 +6,8 @@ use crate::{config::Config, tables};
 pub struct Info {
     pub window_sequence: WindowSequence,
     pub window_shape: bool,
-
     pub max_sfb: usize,
-    pub scale_factor_grouping: Option<u8>,
     pub window_group_length: Vec<u8>,
-
-    pub num_sfb: usize,
     pub sfb_offsets: Vec<Vec<usize>>,
 }
 
@@ -31,7 +27,38 @@ impl Info {
 
         match window_sequence {
             WindowSequence::EightShort => {
-                todo!()
+                let max_sfb = reader.read_bits(4)? as u8;
+                let grouping_bits = reader.read_bits(7)? as u8;
+
+                let mut window_group_length = vec![1u8];
+                for i in 0..7 {
+                    let bit_set = (grouping_bits >> (6 - i)) & 1 == 1;
+                    if bit_set {
+                        *window_group_length.last_mut().unwrap() += 1;
+                    } else {
+                        window_group_length.push(1);
+                    }
+                }
+
+                let band_info = tables::find_band_info(config.sampling_frequency).unwrap();
+                let num_sfb = band_info.short.len();
+                let mut sfb_offsets = Vec::new();
+                for _ in &window_group_length {
+                    let mut offsets = Vec::new();
+                    for sfb in 0..num_sfb {
+                        let offset = band_info.short[sfb];
+                        offsets.push(offset);
+                    }
+                    sfb_offsets.push(offsets);
+                }
+
+                Ok(Info {
+                    window_sequence,
+                    window_shape,
+                    max_sfb: max_sfb as usize,
+                    window_group_length,
+                    sfb_offsets,
+                })
             }
             _ => {
                 let max_sfb = reader.read_bits(6)? as usize;
@@ -54,10 +81,7 @@ impl Info {
                     window_sequence,
                     window_shape,
                     max_sfb,
-                    scale_factor_grouping: None,
                     window_group_length: vec![1],
-
-                    num_sfb: band_info.long.len(),
                     sfb_offsets,
                 })
             }
