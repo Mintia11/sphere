@@ -105,7 +105,7 @@ impl<T: EBMLRead + Seek> MatroskaDemuxer<T> {
     }
 }
 
-impl<T: EBMLRead + Seek> Demuxer for MatroskaDemuxer<T> {
+impl<T: EBMLRead + Seek + Send> Demuxer for MatroskaDemuxer<T> {
     fn tracks(&self) -> &[TrackInfo] {
         &self.tracks
     }
