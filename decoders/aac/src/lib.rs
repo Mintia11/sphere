@@ -10,6 +10,7 @@ use crate::{bitstream::SyntaxElement, config::Config};
 mod bitstream;
 mod config;
 mod ics;
+mod tables;
 
 #[derive(Default)]
 pub struct AacDecoder {
