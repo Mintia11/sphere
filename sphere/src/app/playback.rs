@@ -8,6 +8,7 @@ use std::{
     time::Duration,
 };
 
+use aac::AacDecoder;
 use common::{
     demuxer::{Demuxer, DemuxingError},
     packet::{Frame, Packet, PacketDecoder},
@@ -75,6 +76,7 @@ impl Playback {
             self.tracks.push(track.clone());
 
             let decoder: Option<Box<dyn PacketDecoder>> = match track.codec {
+                CodecId::Aac => Some(Box::new(AacDecoder::default())),
                 CodecId::H264 => Some(Box::new(H264Decoder::new(&renderer.device))),
                 _ => None,
             };
