@@ -2,6 +2,7 @@ use ash::vk::{self, TaggedStructure};
 
 use crate::{Device, error::Error};
 
+pub mod decode;
 pub mod session;
 
 impl Device {

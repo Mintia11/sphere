@@ -5,7 +5,7 @@ use ash::vk;
 use crate::{Device, error::Error};
 
 pub struct CommandBuffer {
-    handle: vk::CommandBuffer,
+    pub(crate) handle: vk::CommandBuffer,
 
     pub(crate) device: Arc<Device>,
 }
@@ -33,22 +33,6 @@ impl Device {
                 &vk::CommandBufferAllocateInfo::default()
                     .command_buffer_count(1)
                     .command_pool(self.transfer_queue().command_pool())
-                    .level(vk::CommandBufferLevel::PRIMARY),
-            )?
-        };
-
-        Ok(CommandBuffer {
-            handle: handles[0],
-            device: self.clone(),
-        })
-    }
-
-    pub fn allocate_decode_command_buffer(self: &Arc<Self>) -> Result<CommandBuffer, Error> {
-        let handles = unsafe {
-            self.handle().allocate_command_buffers(
-                &vk::CommandBufferAllocateInfo::default()
-                    .command_buffer_count(1)
-                    .command_pool(self.decode_queue().command_pool())
                     .level(vk::CommandBufferLevel::PRIMARY),
             )?
         };
