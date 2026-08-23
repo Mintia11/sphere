@@ -10,13 +10,14 @@ use crate::{
 pub use info::WindowSequence;
 
 mod gain_control;
-mod info;
+pub(crate) mod info;
 mod pulse;
 mod scale_factors;
 mod section;
 mod spectral;
 mod tns;
 
+#[derive(Clone)]
 pub struct Ics {
     pub info: Info,
     pub pulse: Option<PulseData>,

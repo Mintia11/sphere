@@ -5,6 +5,7 @@ use crate::{
     tables,
 };
 
+#[derive(Clone)]
 pub struct SpectralData {
     pub coefficents: Box<[f32; 1024]>,
 }

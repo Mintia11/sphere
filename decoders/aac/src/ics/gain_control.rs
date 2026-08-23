@@ -1,5 +1,6 @@
 use common::{bit_io::BitReader, byte_io::ByteRead, packet::Error};
 
+#[derive(Clone)]
 pub struct GainControl {}
 
 impl GainControl {

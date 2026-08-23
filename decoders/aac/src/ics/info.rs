@@ -3,6 +3,7 @@ use derive_try_from_primitive::TryFromPrimitive;
 
 use crate::{config::Config, tables};
 
+#[derive(Clone)]
 pub struct Info {
     pub window_sequence: WindowSequence,
     pub window_shape: bool,
@@ -89,7 +90,7 @@ impl Info {
     }
 }
 
-#[derive(Debug, TryFromPrimitive, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, TryFromPrimitive, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 #[repr(u8)]
 pub enum WindowSequence {
     OnlyLong = 0,

@@ -1,10 +1,14 @@
 use bytes::Bytes;
 use common::{bit_io::BitReader, byte_io::ByteRead, packet::Error};
 
-use crate::{config::Config, ics::Ics};
+use crate::{
+    config::Config,
+    ics::{Ics, info::Info},
+};
 
 pub enum SyntaxElement {
     SingleChannel { ics: Ics },
+    ChannelPairElement { ics: [Ics; 2] },
     Fill { extension: Option<ExtensionPayload> },
 }
 
@@ -22,6 +26,28 @@ impl SyntaxElement {
                     let _tag = reader.read_bits(4)?;
                     let ics = Ics::parse(reader, config, None)?;
                     elements.push(SyntaxElement::SingleChannel { ics });
+                }
+                1 => {
+                    // ID_CPE
+                    let _tag = reader.read_bits(4)?;
+                    let common_window = reader.read_bit()?;
+                    let info = if common_window {
+                        let info = Info::parse(reader, config)?;
+                        let ms_mask_present = reader.read_bits(2)?;
+                        if ms_mask_present == 1 {
+                            todo!("ms mask");
+                        }
+
+                        Some(info)
+                    } else {
+                        None
+                    };
+
+                    let ics_1 = Ics::parse(reader, config, info.clone())?;
+                    let ics_2 = Ics::parse(reader, config, info)?;
+                    elements.push(SyntaxElement::ChannelPairElement {
+                        ics: [ics_1, ics_2],
+                    });
                 }
                 6 => {
                     // ID_FIL

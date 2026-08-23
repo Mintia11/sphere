@@ -92,6 +92,11 @@ impl PacketDecoder for AacDecoder {
                         raw_data.send(vec![ics]).unwrap();
                     }
                 }
+                SyntaxElement::ChannelPairElement { ics } => {
+                    if let Some(raw_data) = &self.raw_data {
+                        raw_data.send(ics.to_vec()).unwrap();
+                    }
+                }
                 SyntaxElement::Fill { extension } => {
                     let _ = extension;
                 }

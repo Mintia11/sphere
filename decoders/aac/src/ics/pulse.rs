@@ -2,11 +2,13 @@ use common::{bit_io::BitReader, byte_io::ByteRead, packet::Error};
 
 use crate::ics::info::Info;
 
+#[derive(Clone)]
 pub struct PulseData {
     pub start_sfb: usize,
     pub pulses: Vec<Pulse>,
 }
 
+#[derive(Clone, Copy)]
 pub struct Pulse {
     pub offset: usize,
     pub amp: u8,
