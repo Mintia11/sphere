@@ -7,4 +7,5 @@ edition = "2024"
 bitflags.workspace = true
 bytes.workspace = true
 etna = { path = "../etna" }
+smallvec = "1.15.2"
 thiserror.workspace = true

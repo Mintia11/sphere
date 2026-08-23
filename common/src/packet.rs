@@ -3,6 +3,7 @@
 use bytes::Bytes;
 
 use crate::{
+    audio::AudioBuffer,
     time::Timestamp,
     track::{TrackId, TrackInfo},
 };
@@ -37,11 +38,24 @@ pub struct Packet {
     pub flags: PacketFlags,
 }
 
-pub trait PacketDecoder {
+pub enum Frame {
+    Video {
+        image: etna::Image,
+        pts: Timestamp,
+    },
+    Audio {
+        samples: AudioBuffer,
+        pts: Timestamp,
+    },
+}
+
+pub trait PacketDecoder: Send {
     fn track(&mut self, track: &TrackInfo) -> Result<(), Error>;
     fn can_decode_track(&self) -> Result<bool, Error>;
     fn info_strings(&self) -> Vec<String>;
     fn start_decode_session(&mut self) -> Result<(), Error>;
+    fn send_packet(&mut self, packet: Packet) -> Result<(), Error>;
+    fn grab_frame(&self) -> Result<Option<Frame>, Error>;
 }
 
 #[derive(Debug, thiserror::Error)]

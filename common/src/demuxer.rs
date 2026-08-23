@@ -7,7 +7,7 @@ use crate::{
 };
 
 /// A trait for demuxers, which are responsible for reading packets from a media source and providing information about the available tracks.
-pub trait Demuxer {
+pub trait Demuxer: Send {
     /// Returns a slice of `TrackInfo` representing the available tracks in the media source.
     fn tracks(&self) -> &[TrackInfo];
 
