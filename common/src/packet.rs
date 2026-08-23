@@ -3,7 +3,7 @@
 use bytes::Bytes;
 
 use crate::{
-    audio::AudioBuffer,
+    audio::{AudioBuffer, AudioInfo},
     huffman,
     time::Timestamp,
     track::{TrackId, TrackInfo},
@@ -57,6 +57,10 @@ pub trait PacketDecoder: Send {
     fn start_decode_session(&mut self) -> Result<(), Error>;
     fn send_packet(&mut self, packet: Packet) -> Result<(), Error>;
     fn grab_frame(&self) -> Result<Option<Frame>, Error>;
+
+    fn audio_info(&self) -> Option<AudioInfo> {
+        None
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
