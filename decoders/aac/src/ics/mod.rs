@@ -2,10 +2,11 @@ use common::{bit_io::BitReader, byte_io::ByteRead, packet::Error};
 
 use crate::{
     config::Config,
-    ics::{info::Info, section::SectionData},
+    ics::{info::Info, scale_factors::ScaleFactors, section::SectionData},
 };
 
 mod info;
+mod scale_factors;
 mod section;
 
 #[derive(Debug)]
@@ -23,6 +24,7 @@ impl Ics {
             None => Info::parse(reader, config)?,
         };
         let section = SectionData::parse(reader, &info)?;
+        let scale_factors = ScaleFactors::parse(reader, global_gain, &info, &section)?;
 
         Ok(Self {})
     }
