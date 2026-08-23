@@ -8,7 +8,7 @@ use ash::{
     vk::{self, TaggedStructure},
 };
 use gpu_allocator::{
-    AllocationSizes, AllocatorDebugSettings,
+    AllocationSizes, AllocatorDebugSettings, MemoryLocation,
     vulkan::{Allocator, AllocatorCreateDesc},
 };
 
@@ -22,6 +22,8 @@ use crate::{
 pub struct Device {
     physical_device: vk::PhysicalDevice,
     device: ash::Device,
+
+    memory_props: vk::PhysicalDeviceMemoryProperties,
     allocator: Mutex<Allocator>,
 
     video_queue_ext: khr::video_queue::Device,
@@ -89,9 +91,17 @@ impl Device {
         };
         let allocator = Allocator::new(&allocator_info)?;
 
+        let props = unsafe {
+            instance
+                .handle()
+                .get_physical_device_memory_properties(physical_device)
+        };
+
         Ok(Arc::new(Device {
             physical_device,
             device: device.clone(),
+
+            memory_props: props,
             allocator: Mutex::new(allocator),
 
             video_queue_ext: khr::video_queue::Device::load(instance.handle(), &device),
@@ -117,6 +127,20 @@ impl Device {
         self.physical_device
     }
 
+    pub fn location_for(&self, type_bits: u32) -> MemoryLocation {
+        let has_device_local = (0..self.memory_props.memory_type_count).any(|i| {
+            (type_bits & (1 << i)) != 0
+                && self.memory_props.memory_types[i as usize]
+                    .property_flags
+                    .contains(vk::MemoryPropertyFlags::DEVICE_LOCAL)
+        });
+
+        if has_device_local {
+            MemoryLocation::GpuOnly
+        } else {
+            MemoryLocation::CpuToGpu
+        }
+    }
     pub fn allocator(&self) -> &Mutex<Allocator> {
         &self.allocator
     }
