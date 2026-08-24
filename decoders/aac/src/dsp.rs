@@ -15,6 +15,24 @@ use crate::{
     window::{generate_kaiser_bessel_window, generate_sine_window},
 };
 
+struct ChannelState {
+    prev_window_shape: bool,
+    pcm_long: Box<[f32; 2048]>,
+    pcm_short: Box<[f32; 1152]>,
+    delay: Box<[f32; 1024]>,
+}
+
+impl Default for ChannelState {
+    fn default() -> Self {
+        Self {
+            prev_window_shape: false,
+            pcm_long: Box::new([0.0; 2048]),
+            pcm_short: Box::new([0.0; 1152]),
+            delay: Box::new([0.0; 1024]),
+        }
+    }
+}
+
 pub fn run_dsp(stop: Arc<AtomicBool>, raw_data: Receiver<Vec<Ics>>, samples: Sender<AudioBuffer>) {
     let mut short_mdct = Mdct::new(128, 1.0 / 256.0);
     let mut long_mdct = Mdct::new(1024, 1.0 / 2048.0);
@@ -29,25 +47,28 @@ pub fn run_dsp(stop: Arc<AtomicBool>, raw_data: Receiver<Vec<Ics>>, samples: Sen
     generate_sine_window(1.0, 1024, sine_long_window.as_mut_slice());
     generate_sine_window(1.0, 128, sine_short_window.as_mut_slice());
 
-    let mut prev_window_shape = false;
-    let mut pcm_long = Box::new([0.0; 2048]);
-    let mut pcm_short = Box::new([0.0; 1152]);
-    let mut delay = Box::new([0.0; 1024]);
+    let mut channel_state: Vec<ChannelState> = Vec::new();
 
     while !stop.load(Ordering::Relaxed) {
         let Ok(packet) = raw_data.recv_timeout(Duration::from_millis(100)) else {
             continue;
         };
 
+        if channel_state.len() < packet.len() {
+            channel_state.resize_with(packet.len(), ChannelState::default);
+        }
+
         let mut decoded_samples = SmallVec::new();
-        for ics in packet {
+        for (channel_idx, ics) in packet.into_iter().enumerate() {
+            let state = &mut channel_state[channel_idx];
+
             let (long_window, short_window) = if ics.info.window_shape {
                 (kb_long_window.as_slice(), kb_short_window.as_slice())
             } else {
                 (sine_long_window.as_slice(), sine_short_window.as_slice())
             };
 
-            let (prev_long_window, prev_short_window) = if prev_window_shape {
+            let (prev_long_window, prev_short_window) = if state.prev_window_shape {
                 (kb_long_window.as_slice(), kb_short_window.as_slice())
             } else {
                 (sine_long_window.as_slice(), sine_short_window.as_slice())
@@ -60,30 +81,33 @@ pub fn run_dsp(stop: Arc<AtomicBool>, raw_data: Receiver<Vec<Ics>>, samples: Sen
                         .spectral
                         .coefficents
                         .chunks_exact(128)
-                        .zip(pcm_long.chunks_exact_mut(256))
+                        .zip(state.pcm_long.chunks_exact_mut(256))
                     {
                         short_mdct.imdct(ain, aout);
                     }
 
-                    pcm_short.fill(0.0);
+                    state.pcm_short.fill(0.0);
 
-                    for (w, src) in pcm_long.chunks_exact(256).enumerate() {
+                    for (w, src) in state.pcm_long.chunks_exact(256).enumerate() {
                         if w > 0 {
                             for i in 0..128 {
-                                pcm_short[w * 128 + i] += src[i] * short_window[i];
-                                pcm_short[w * 128 + i + 128] +=
+                                state.pcm_short[w * 128 + i] += src[i] * short_window[i];
+                                state.pcm_short[w * 128 + i + 128] +=
                                     src[i + 128] * short_window[127 - i];
                             }
                         } else {
                             for i in 0..128 {
-                                pcm_short[i] = src[i] * prev_short_window[i];
-                                pcm_short[i + 128] = src[i + 128] * short_window[127 - i];
+                                state.pcm_short[i] = src[i] * prev_short_window[i];
+                                state.pcm_short[i + 128] = src[i + 128] * short_window[127 - i];
                             }
                         }
                     }
                 }
                 _ => {
-                    long_mdct.imdct(ics.spectral.coefficents.as_slice(), pcm_long.as_mut_slice());
+                    long_mdct.imdct(
+                        ics.spectral.coefficents.as_slice(),
+                        state.pcm_long.as_mut_slice(),
+                    );
                 }
             }
 
@@ -93,48 +117,50 @@ pub fn run_dsp(stop: Arc<AtomicBool>, raw_data: Receiver<Vec<Ics>>, samples: Sen
             match ics.info.window_sequence {
                 WindowSequence::LongStart => {
                     for i in 0..1024 {
-                        dst[i] = delay[i] + (pcm_long[i] * prev_long_window[i]);
+                        dst[i] = state.delay[i] + (state.pcm_long[i] * prev_long_window[i]);
                     }
-                    delay[..SHORT_WIN_POINT0]
-                        .copy_from_slice(&pcm_long[1024..(SHORT_WIN_POINT0 + 1024)]);
+                    state.delay[..SHORT_WIN_POINT0]
+                        .copy_from_slice(&state.pcm_long[1024..(SHORT_WIN_POINT0 + 1024)]);
                     for i in SHORT_WIN_POINT0..SHORT_WIN_POINT1 {
-                        delay[i] = pcm_long[i + 1024] * short_window[127 - (i - SHORT_WIN_POINT0)];
+                        state.delay[i] =
+                            state.pcm_long[i + 1024] * short_window[127 - (i - SHORT_WIN_POINT0)];
                     }
-                    delay[SHORT_WIN_POINT1..].fill(0.0);
+                    state.delay[SHORT_WIN_POINT1..].fill(0.0);
                 }
                 WindowSequence::EightShort => {
-                    dst[..SHORT_WIN_POINT0].copy_from_slice(&delay[..SHORT_WIN_POINT0]);
-                    for i in SHORT_WIN_POINT0..1024 {
-                        dst[i] = delay[i] + pcm_short[i - SHORT_WIN_POINT0];
+                    dst[..SHORT_WIN_POINT0].copy_from_slice(&state.delay[..SHORT_WIN_POINT0]);
+                    for (i, out) in dst.iter_mut().enumerate().take(1024).skip(SHORT_WIN_POINT0) {
+                        *out = state.delay[i] + state.pcm_short[i - SHORT_WIN_POINT0];
                     }
                     for i in 0..SHORT_WIN_POINT1 {
-                        delay[i] = pcm_short[i + 512 + 64];
+                        state.delay[i] = state.pcm_short[i + 512 + 64];
                     }
-                    delay[SHORT_WIN_POINT1..].fill(0.0);
+                    state.delay[SHORT_WIN_POINT1..].fill(0.0);
                 }
                 WindowSequence::LongStop => {
-                    dst[..SHORT_WIN_POINT0].copy_from_slice(&delay[..SHORT_WIN_POINT0]);
+                    dst[..SHORT_WIN_POINT0].copy_from_slice(&state.delay[..SHORT_WIN_POINT0]);
                     for i in SHORT_WIN_POINT0..SHORT_WIN_POINT1 {
-                        dst[i] = delay[i] + pcm_long[i] * prev_short_window[i - SHORT_WIN_POINT0];
+                        dst[i] = state.delay[i]
+                            + state.pcm_long[i] * prev_short_window[i - SHORT_WIN_POINT0];
                     }
-                    for i in SHORT_WIN_POINT1..1024 {
-                        dst[i] = delay[i] + pcm_long[i];
+                    for (i, out) in dst.iter_mut().enumerate().take(1024).skip(SHORT_WIN_POINT0) {
+                        *out = state.delay[i] + state.pcm_long[i];
                     }
                     for i in 0..1024 {
-                        delay[i] = pcm_long[i + 1024] * long_window[1023 - i];
+                        state.delay[i] = state.pcm_long[i + 1024] * long_window[1023 - i];
                     }
                 }
                 WindowSequence::OnlyLong => {
                     for i in 0..1024 {
-                        dst[i] = delay[i] + (pcm_long[i] * prev_long_window[i]);
+                        dst[i] = state.delay[i] + (state.pcm_long[i] * prev_long_window[i]);
                     }
                     for i in 0..1024 {
-                        delay[i] = pcm_long[i + 1024] * long_window[1023 - i];
+                        state.delay[i] = state.pcm_long[i + 1024] * long_window[1023 - i];
                     }
                 }
             }
 
-            prev_window_shape = ics.info.window_shape;
+            state.prev_window_shape = ics.info.window_shape;
 
             decoded_samples.push(dst);
         }
