@@ -3,7 +3,7 @@ use common::{bit_io::BitReader, byte_io::ByteRead, packet::Error};
 
 use crate::{
     config::Config,
-    ics::{Ics, info::Info},
+    ics::{Ics, WindowSequence, info::Info},
 };
 
 pub enum SyntaxElement {
@@ -31,11 +31,31 @@ impl SyntaxElement {
                     // ID_CPE
                     let _tag = reader.read_bits(4)?;
                     let common_window = reader.read_bit()?;
+                    let mut ms_used = Vec::new();
                     let info = if common_window {
                         let info = Info::parse(reader, config)?;
                         let ms_mask_present = reader.read_bits(2)?;
-                        if ms_mask_present == 1 {
-                            todo!("ms mask");
+                        match ms_mask_present {
+                            0 | 2 => {
+                                let is_used = ms_mask_present == 2;
+                                for _ in 0..info.window_group_length.len() {
+                                    let mut group = Vec::new();
+                                    for _ in 0..info.max_sfb {
+                                        group.push(is_used);
+                                    }
+                                    ms_used.push(group);
+                                }
+                            }
+                            1 => {
+                                for _ in 0..info.window_group_length.len() {
+                                    let mut group = Vec::new();
+                                    for _ in 0..info.max_sfb {
+                                        group.push(reader.read_bit()?);
+                                    }
+                                    ms_used.push(group);
+                                }
+                            }
+                            _ => unreachable!(),
                         }
 
                         Some(info)
@@ -43,8 +63,56 @@ impl SyntaxElement {
                         None
                     };
 
-                    let ics_1 = Ics::parse(reader, config, info.clone())?;
-                    let ics_2 = Ics::parse(reader, config, info)?;
+                    let mut ics_1 = Ics::parse(reader, config, info.clone())?;
+                    let mut ics_2 = Ics::parse(reader, config, info)?;
+
+                    if common_window {
+                        let offsets = &ics_1.info.sfb_offsets;
+                        let mut w = 0;
+
+                        for (g, &group_len) in ics_1.info.window_group_length.iter().enumerate() {
+                            for _ in 0..group_len {
+                                for sfb in 0..ics_1.info.max_sfb {
+                                    let start = w * 128 + offsets[g][sfb];
+                                    let end = w * 128 + offsets[g][sfb + 1];
+
+                                    let Some(section) = ics_2.section.find_section(g, sfb) else {
+                                        continue;
+                                    };
+
+                                    println!("g: {g}, sfb: {sfb}");
+                                    let ms_used = ms_used[g][sfb];
+                                    match section.cb {
+                                        13 => {}
+                                        cb @ (14 | 15) => {
+                                            let dir = if cb == 15 { 1.0 } else { -1.0 };
+                                            let scale = dir * ics_2.scale_factors.groups[g][sfb];
+
+                                            let left = &ics_2.spectral.coefficents[start..end];
+                                            let right = &mut ics_1.spectral.coefficents[start..end];
+
+                                            for (l, r) in left.iter().zip(right) {
+                                                *r = scale * l;
+                                            }
+                                        }
+                                        _ if ms_used => {
+                                            let mid = &mut ics_1.spectral.coefficents[start..end];
+                                            let side = &mut ics_2.spectral.coefficents[start..end];
+
+                                            for (m, s) in mid.iter_mut().zip(side) {
+                                                let tmp = *m - *s;
+                                                *m += *s;
+                                                *s = tmp;
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+
+                                w += 1;
+                            }
+                        }
+                    }
                     elements.push(SyntaxElement::ChannelPairElement {
                         ics: [ics_1, ics_2],
                     });
