@@ -7,33 +7,33 @@ use crate::{
 };
 
 pub struct Sps {
-    profile_idc: Profile,
-    constrain_set_flags: [bool; 6],
-    level_idc: Level,
-    seq_parameter_set_id: u64,
-    chroma_format: ChromaFormat,
-    separate_colour_plane: bool,
-    bit_depth_luma_minus_8: u64,
-    bit_depth_chroma_minus_8: u64,
-    qpprime_y_zero_transform_bypass: bool,
-    seq_scaling_matrix_present: bool,
-    log2_max_frame_num_minus4: u64,
-    pic_order_cnt_type: u64,
-    log2_max_pic_order_cnt_lsb_minus4: u64,
-    delta_pic_order_always_zero: bool,
-    offset_for_non_ref_pic: i64,
-    offset_for_top_to_bottom_field: i64,
-    num_ref_frames_in_pic_order_cnt_cycle: u64,
-    offset_for_ref_frame: Vec<i64>,
-    max_num_ref_frames: u64,
-    gaps_in_frame_num_value_allowed: bool,
-    pic_width_in_mbs_minus1: u64,
-    pic_height_in_map_units_minus1: u64,
-    frame_mbs_only: bool,
-    mb_adaptive_frame_field: bool,
-    direct_8x8_inference: bool,
-    frame_cropping: bool,
-    vui_parameters_present: bool,
+    pub profile_idc: Profile,
+    pub constrain_set_flags: [bool; 6],
+    pub level_idc: Level,
+    pub seq_parameter_set_id: u64,
+    pub chroma_format: ChromaFormat,
+    pub separate_colour_plane: bool,
+    pub bit_depth_luma_minus_8: u64,
+    pub bit_depth_chroma_minus_8: u64,
+    pub qpprime_y_zero_transform_bypass: bool,
+    pub seq_scaling_matrix_present: bool,
+    pub log2_max_frame_num_minus4: u64,
+    pub pic_order_cnt_type: u64,
+    pub log2_max_pic_order_cnt_lsb_minus4: u64,
+    pub delta_pic_order_always_zero: bool,
+    pub offset_for_non_ref_pic: i64,
+    pub offset_for_top_to_bottom_field: i64,
+    pub num_ref_frames_in_pic_order_cnt_cycle: u64,
+    pub offset_for_ref_frame: Vec<i64>,
+    pub max_num_ref_frames: u64,
+    pub gaps_in_frame_num_value_allowed: bool,
+    pub pic_width_in_mbs_minus1: u64,
+    pub pic_height_in_map_units_minus1: u64,
+    pub frame_mbs_only: bool,
+    pub mb_adaptive_frame_field: bool,
+    pub direct_8x8_inference: bool,
+    pub frame_cropping: bool,
+    pub vui_parameters_present: bool,
 }
 
 impl Sps {
@@ -159,6 +159,19 @@ impl Sps {
             frame_cropping,
             vui_parameters_present,
         })
+    }
+
+    pub fn width(&self) -> u64 {
+        self.pic_width_in_mbs_minus1
+            .saturating_add(1)
+            .saturating_mul(16)
+    }
+
+    pub fn height(&self) -> u64 {
+        self.pic_height_in_map_units_minus1
+            .saturating_add(1)
+            .saturating_mul(16)
+            .saturating_mul(if self.frame_mbs_only { 1 } else { 2 })
     }
 }
 

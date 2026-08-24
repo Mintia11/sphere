@@ -10,7 +10,7 @@ use etna::{
     vk::{self, TaggedStructure},
 };
 
-use crate::avcc::Avcc;
+use crate::{avcc::Avcc, sps::Sps};
 
 mod avcc;
 mod nal;
@@ -112,10 +112,15 @@ impl PacketDecoder for H264Decoder {
                 "Profile: {:?} (Level: {:?})",
                 config.profile, config.level
             ));
-            info_strings.push(format!(
-                "Chroma Format: {:?} (Luma bits: {}, Chroma bits: {})",
-                config.chroma_format, config.bit_depth_luma, config.bit_depth_chroma
-            ));
+            if let Ok(sps) = Sps::parse(&config.sps[0]) {
+                info_strings.push(format!(
+                    "Chroma Format: {:?} (Luma bits: {}, Chroma bits: {})",
+                    sps.chroma_format,
+                    sps.bit_depth_luma_minus_8 + 8,
+                    sps.bit_depth_chroma_minus_8 + 8
+                ));
+                info_strings.push(format!("Resolution: {}x{}", sps.width(), sps.height()));
+            }
         }
 
         info_strings
