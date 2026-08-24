@@ -6,6 +6,7 @@ use crate::{
     nal::RawNal,
 };
 
+#[derive(Debug)]
 pub struct Sps {
     pub profile_idc: Profile,
     pub constrain_set_flags: [bool; 6],
@@ -33,12 +34,16 @@ pub struct Sps {
     pub mb_adaptive_frame_field: bool,
     pub direct_8x8_inference: bool,
     pub frame_cropping: bool,
+    pub frame_crop_left_offset: u64,
+    pub frame_crop_right_offset: u64,
+    pub frame_crop_top_offset: u64,
+    pub frame_crop_bottom_offset: u64,
     pub vui_parameters_present: bool,
 }
 
 impl Sps {
     pub fn parse(nal: &RawNal) -> Result<Self, Error> {
-        let reader = ByteReader::new(nal.data());
+        let reader = ByteReader::new(nal.strip_emulation_prevention());
         let mut reader = BitReader::new(reader);
 
         let profile_idc = reader.read_bits(8)?;
@@ -113,14 +118,23 @@ impl Sps {
         }
 
         let direct_8x8_inference = reader.read_bit()?;
+
+        let mut frame_crop_left_offset = 0;
+        let mut frame_crop_right_offset = 0;
+        let mut frame_crop_top_offset = 0;
+        let mut frame_crop_bottom_offset = 0;
+
         let frame_cropping = reader.read_bit()?;
         if frame_cropping {
-            todo!("frame cropping");
+            frame_crop_left_offset = reader.read_exp()?;
+            frame_crop_right_offset = reader.read_exp()?;
+            frame_crop_top_offset = reader.read_exp()?;
+            frame_crop_bottom_offset = reader.read_exp()?;
         }
 
         let vui_parameters_present = reader.read_bit()?;
         if vui_parameters_present {
-            todo!("vui parameters");
+            // todo: vui parameters
         }
 
         Ok(Self {
@@ -157,21 +171,67 @@ impl Sps {
             mb_adaptive_frame_field,
             direct_8x8_inference,
             frame_cropping,
+            frame_crop_left_offset,
+            frame_crop_right_offset,
+            frame_crop_top_offset,
+            frame_crop_bottom_offset,
             vui_parameters_present,
         })
     }
 
     pub fn width(&self) -> u64 {
+        let crop_x = if self.frame_cropping {
+            self.frame_crop_left_offset
+                .saturating_add(self.frame_crop_right_offset)
+                .saturating_mul(self.crop_unit_x())
+        } else {
+            0
+        };
         self.pic_width_in_mbs_minus1
             .saturating_add(1)
             .saturating_mul(16)
+            .saturating_sub(crop_x)
     }
 
     pub fn height(&self) -> u64 {
+        let crop_y = if self.frame_cropping {
+            self.frame_crop_top_offset
+                .saturating_add(self.frame_crop_bottom_offset)
+                .saturating_mul(self.crop_unit_y())
+        } else {
+            0
+        };
         self.pic_height_in_map_units_minus1
             .saturating_add(1)
             .saturating_mul(16)
             .saturating_mul(if self.frame_mbs_only { 1 } else { 2 })
+            .saturating_sub(crop_y)
+    }
+
+    fn crop_unit_x(&self) -> u64 {
+        if self.chroma_format == ChromaFormat::Monochrome {
+            1
+        } else {
+            if self.chroma_format == ChromaFormat::Yuv444 {
+                1
+            } else {
+                2
+            }
+        }
+    }
+
+    fn crop_unit_y(&self) -> u64 {
+        let sub_height_c = if self.chroma_format == ChromaFormat::Yuv420 {
+            2
+        } else {
+            1
+        };
+        let frame_factor = if self.frame_mbs_only { 1 } else { 2 };
+        if self.chroma_format == ChromaFormat::Monochrome {
+            frame_factor
+        } else {
+            sub_height_c * frame_factor
+        }
     }
 }
 
@@ -195,7 +255,7 @@ impl From<Sps> for vk::native::StdVideoH264SequenceParameterSet {
             .set_qpprime_y_zero_transform_bypass_flag(value.qpprime_y_zero_transform_bypass as u32);
         flags.set_separate_colour_plane_flag(value.separate_colour_plane as u32);
         flags.set_seq_scaling_matrix_present_flag(value.seq_scaling_matrix_present as u32);
-        flags.set_vui_parameters_present_flag(value.vui_parameters_present as u32);
+        flags.set_vui_parameters_present_flag(false as u32);
 
         vk::native::StdVideoH264SequenceParameterSet {
             flags,
@@ -216,11 +276,10 @@ impl From<Sps> for vk::native::StdVideoH264SequenceParameterSet {
             reserved1: 0,
             pic_width_in_mbs_minus1: value.pic_width_in_mbs_minus1 as u32,
             pic_height_in_map_units_minus1: value.pic_height_in_map_units_minus1 as u32,
-            // TODO: Frame cropping
-            frame_crop_left_offset: 0,
-            frame_crop_right_offset: 0,
-            frame_crop_top_offset: 0,
-            frame_crop_bottom_offset: 0,
+            frame_crop_left_offset: value.frame_crop_left_offset as u32,
+            frame_crop_right_offset: value.frame_crop_right_offset as u32,
+            frame_crop_top_offset: value.frame_crop_top_offset as u32,
+            frame_crop_bottom_offset: value.frame_crop_bottom_offset as u32,
             reserved2: 0,
             pOffsetForRefFrame: value
                 .offset_for_ref_frame
