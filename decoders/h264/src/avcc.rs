@@ -9,6 +9,7 @@ use common::{
     byte_io::{ByteRead, ByteReader},
     packet::Error,
 };
+use derive_try_from_primitive::TryFromPrimitive;
 use etna::vk;
 
 use crate::nal::RawNal;
@@ -149,6 +150,10 @@ impl Profile {
             _ => todo!("unknown profile: {profile}"),
         }
     }
+
+    pub fn is_high(&self) -> bool {
+        matches!(self, Profile::High)
+    }
 }
 
 impl From<Profile> for vk::native::StdVideoH264ProfileIdc {
@@ -172,7 +177,14 @@ impl Debug for Level {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+impl From<Level> for vk::native::StdVideoH264LevelIdc {
+    fn from(value: Level) -> Self {
+        (value.0 * 10 + value.1) as u32
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, TryFromPrimitive)]
+#[repr(u64)]
 pub enum ChromaFormat {
     Monochrome,
     Yuv420,

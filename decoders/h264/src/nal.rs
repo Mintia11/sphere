@@ -31,9 +31,17 @@ impl RawNal {
             data: bytes.slice(1..),
         })
     }
+
+    pub fn typ(&self) -> NalType {
+        self.typ
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
 }
 
-#[derive(Debug, TryFromPrimitive)]
+#[derive(Debug, TryFromPrimitive, Clone, Copy)]
 #[repr(u64)]
 pub enum NalType {
     Sps = 0xE,

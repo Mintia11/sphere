@@ -1,11 +1,11 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use common::{
-    packet::{Error, Packet, PacketDecoder},
+    packet::{Error, Frame, Packet, PacketDecoder},
     track::TrackInfo,
 };
 use etna::{
-    Device, Image,
+    Device,
     video::session::VideoSession,
     vk::{self, TaggedStructure},
 };
@@ -14,6 +14,7 @@ use crate::avcc::Avcc;
 
 mod avcc;
 mod nal;
+mod sps;
 
 pub struct H264Decoder {
     device: Arc<Device>,
@@ -165,5 +166,9 @@ impl PacketDecoder for H264Decoder {
 
     fn send_packet(&mut self, packet: Packet) -> Result<(), Error> {
         Ok(())
+    }
+
+    fn grab_frame(&self) -> Result<Option<Frame>, Error> {
+        Ok(None)
     }
 }
