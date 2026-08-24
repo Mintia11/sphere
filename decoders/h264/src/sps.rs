@@ -208,6 +208,24 @@ impl Sps {
             .saturating_sub(crop_y)
     }
 
+    pub fn bit_depth_luma(&self) -> vk::VideoComponentBitDepthFlagsKHR {
+        match self.bit_depth_luma_minus_8 {
+            0 => vk::VideoComponentBitDepthFlagsKHR::TYPE_8,
+            2 => vk::VideoComponentBitDepthFlagsKHR::TYPE_10,
+            4 => vk::VideoComponentBitDepthFlagsKHR::TYPE_12,
+            _ => vk::VideoComponentBitDepthFlagsKHR::INVALID,
+        }
+    }
+
+    pub fn bit_depth_chroma(&self) -> vk::VideoComponentBitDepthFlagsKHR {
+        match self.bit_depth_chroma_minus_8 {
+            0 => vk::VideoComponentBitDepthFlagsKHR::TYPE_8,
+            2 => vk::VideoComponentBitDepthFlagsKHR::TYPE_10,
+            4 => vk::VideoComponentBitDepthFlagsKHR::TYPE_12,
+            _ => vk::VideoComponentBitDepthFlagsKHR::INVALID,
+        }
+    }
+
     fn crop_unit_x(&self) -> u64 {
         if self.chroma_format == ChromaFormat::Monochrome {
             1

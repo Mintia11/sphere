@@ -18,7 +18,7 @@ mod sps;
 
 pub struct H264Decoder {
     device: Arc<Device>,
-    config: Option<Avcc>,
+    sps: Option<Sps>,
 
     session: Option<VideoSession>,
 }
@@ -27,24 +27,24 @@ impl H264Decoder {
     pub fn new(device: &Arc<Device>) -> Self {
         Self {
             device: device.clone(),
-            config: None,
+            sps: None,
 
             session: None,
         }
     }
 
     fn h264_profile<'a>(
-        config: &Avcc,
+        sps: &Sps,
         profile_h264: &'a mut vk::VideoDecodeH264ProfileInfoKHR<'a>,
     ) -> vk::VideoProfileInfoKHR<'a> {
         *profile_h264 = vk::VideoDecodeH264ProfileInfoKHR::default()
-            .std_profile_idc(config.profile.into())
+            .std_profile_idc(sps.profile_idc.into())
             .picture_layout(vk::VideoDecodeH264PictureLayoutFlagsKHR::PROGRESSIVE);
 
         vk::VideoProfileInfoKHR::default()
-            .chroma_bit_depth(config.bit_depth_chroma())
-            .chroma_subsampling(config.chroma_format.into())
-            .luma_bit_depth(config.bit_depth_luma())
+            .chroma_bit_depth(sps.bit_depth_chroma())
+            .chroma_subsampling(sps.chroma_format.into())
+            .luma_bit_depth(sps.bit_depth_luma())
             .video_codec_operation(vk::VideoCodecOperationFlagsKHR::DECODE_H264)
             .push(profile_h264)
     }
@@ -100,39 +100,37 @@ impl PacketDecoder for H264Decoder {
         ))?;
 
         let avcc = Avcc::parse(private_data)?;
-        self.config = Some(avcc);
+        self.sps = Some(Sps::parse(&avcc.sps[0])?);
 
         Ok(())
     }
 
     fn info_strings(&self) -> Vec<String> {
         let mut info_strings = Vec::new();
-        if let Some(config) = &self.config {
+        if let Some(sps) = &self.sps {
             info_strings.push(format!(
                 "Profile: {:?} (Level: {:?})",
-                config.profile, config.level
+                sps.profile_idc, sps.level_idc
             ));
-            if let Ok(sps) = Sps::parse(&config.sps[0]) {
-                info_strings.push(format!(
-                    "Chroma Format: {:?} (Luma bits: {}, Chroma bits: {})",
-                    sps.chroma_format,
-                    sps.bit_depth_luma_minus_8 + 8,
-                    sps.bit_depth_chroma_minus_8 + 8
-                ));
-                info_strings.push(format!("Resolution: {}x{}", sps.width(), sps.height()));
-            }
+            info_strings.push(format!(
+                "Chroma Format: {:?} (Luma bits: {}, Chroma bits: {})",
+                sps.chroma_format,
+                sps.bit_depth_luma_minus_8 + 8,
+                sps.bit_depth_chroma_minus_8 + 8
+            ));
+            info_strings.push(format!("Resolution: {}x{}", sps.width(), sps.height()));
         }
 
         info_strings
     }
 
     fn can_decode_track(&self) -> Result<bool, Error> {
-        let Some(config) = &self.config else {
+        let Some(sps) = &self.sps else {
             return Ok(false);
         };
 
         let mut profile_h264 = vk::VideoDecodeH264ProfileInfoKHR::default();
-        let profile = Self::h264_profile(config, &mut profile_h264);
+        let profile = Self::h264_profile(sps, &mut profile_h264);
 
         match self.get_capabilities(&profile) {
             Ok(_) => Ok(true),
@@ -144,12 +142,12 @@ impl PacketDecoder for H264Decoder {
     }
 
     fn start_decode_session(&mut self) -> Result<(), Error> {
-        let Some(config) = &self.config else {
+        let Some(sps) = &self.sps else {
             return Ok(());
         };
 
         let mut profile_h264 = vk::VideoDecodeH264ProfileInfoKHR::default();
-        let profile = Self::h264_profile(config, &mut profile_h264);
+        let profile = Self::h264_profile(sps, &mut profile_h264);
         let (caps, _, _) = self.get_capabilities(&profile)?;
 
         let formats = self

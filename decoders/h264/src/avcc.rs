@@ -16,18 +16,8 @@ use crate::nal::RawNal;
 
 #[derive(Debug)]
 pub struct Avcc {
-    pub profile: Profile,
-    pub level: Level,
-    pub lenght_size: u64,
-
     pub sps: Vec<RawNal>,
     pub pps: Vec<RawNal>,
-
-    pub chroma_format: ChromaFormat,
-    pub bit_depth_luma: usize,
-    pub bit_depth_chroma: usize,
-
-    pub sps_ext: Vec<RawNal>,
 }
 
 impl Avcc {
@@ -42,11 +32,11 @@ impl Avcc {
             ));
         }
 
-        let profile = reader.read_bits(8)?;
-        let profile_compatibility = reader.read_bits(8)?;
-        let level = reader.read_bits(8)?;
+        let _profile = reader.read_bits(8)?;
+        let _profile_compatibility = reader.read_bits(8)?;
+        let _level = reader.read_bits(8)?;
         let _ = reader.read_bits(6)?;
-        let lenght_size = reader.read_bits(2)? + 1;
+        let _lenght_size = reader.read_bits(2)? + 1;
         let _ = reader.read_bits(3)?;
         let sps_num = reader.read_bits(5)?;
         reader.byte_align();
@@ -79,61 +69,7 @@ impl Avcc {
             pps.push(RawNal::parse(&bytes)?);
         }
 
-        match profile {
-            100 | 110 | 122 | 144 => {
-                let mut reader = BitReader::new(byte_reader);
-                let _ = reader.read_bits(6)?;
-
-                if reader.eof() {
-                    return Ok(Self {
-                        profile: Profile::parse(profile as u8, profile_compatibility as u8),
-                        level: Level::parse(level as u8),
-                        lenght_size,
-
-                        sps,
-                        pps,
-
-                        chroma_format: ChromaFormat::Yuv420,
-                        bit_depth_luma: 8,
-                        bit_depth_chroma: 8,
-                        sps_ext: Vec::new(),
-                    });
-                }
-
-                todo!("Parse extended avcc")
-            }
-            _ => Ok(Self {
-                profile: Profile::parse(profile as u8, profile_compatibility as u8),
-                level: Level::parse(level as u8),
-                lenght_size,
-
-                sps,
-                pps,
-
-                chroma_format: ChromaFormat::Yuv420,
-                bit_depth_luma: 8,
-                bit_depth_chroma: 8,
-                sps_ext: Vec::new(),
-            }),
-        }
-    }
-
-    pub fn bit_depth_luma(&self) -> vk::VideoComponentBitDepthFlagsKHR {
-        match self.bit_depth_luma {
-            8 => vk::VideoComponentBitDepthFlagsKHR::TYPE_8,
-            10 => vk::VideoComponentBitDepthFlagsKHR::TYPE_10,
-            12 => vk::VideoComponentBitDepthFlagsKHR::TYPE_12,
-            _ => vk::VideoComponentBitDepthFlagsKHR::INVALID,
-        }
-    }
-
-    pub fn bit_depth_chroma(&self) -> vk::VideoComponentBitDepthFlagsKHR {
-        match self.bit_depth_chroma {
-            8 => vk::VideoComponentBitDepthFlagsKHR::TYPE_8,
-            10 => vk::VideoComponentBitDepthFlagsKHR::TYPE_10,
-            12 => vk::VideoComponentBitDepthFlagsKHR::TYPE_12,
-            _ => vk::VideoComponentBitDepthFlagsKHR::INVALID,
-        }
+        Ok(Self { sps, pps })
     }
 }
 
