@@ -160,11 +160,23 @@ impl PacketDecoder for H264Decoder {
 
         println!("Formats: {formats:#x?}");
 
+        let pps = self.pps.unwrap().into();
+        let sps = self.sps.clone().unwrap().into();
+
+        let add_info = vk::VideoDecodeH264SessionParametersAddInfoKHR::default()
+            .std_pp_ss(std::slice::from_ref(&pps))
+            .std_sp_ss(std::slice::from_ref(&sps));
+        let mut params_info = vk::VideoDecodeH264SessionParametersCreateInfoKHR::default()
+            .max_std_pps_count(1)
+            .max_std_sps_count(1)
+            .parameters_add_info(&add_info);
+
         let session = self.device.create_video_session(
             &caps,
             &profile,
             formats[0].format,
             formats[0].format,
+            &mut params_info,
         )?;
         self.session = Some(session);
 
@@ -172,6 +184,13 @@ impl PacketDecoder for H264Decoder {
     }
 
     fn send_packet(&mut self, packet: Packet) -> Result<(), Error> {
+        let cmd = self.device.allocate_decode_command_buffer()?;
+        cmd.begin()?;
+        cmd.begin_videocoding(self.session.as_ref().unwrap());
+        cmd.decode();
+        cmd.end_videocoding();
+        cmd.end()?;
+
         Ok(())
     }
 

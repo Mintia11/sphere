@@ -6,6 +6,7 @@ use crate::{
     nal::RawNal,
 };
 
+#[derive(Clone)]
 pub struct Sps {
     pub profile_idc: Profile,
     pub constrain_set_flags: [bool; 6],

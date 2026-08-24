@@ -3,6 +3,7 @@ use etna::vk;
 
 use crate::nal::RawNal;
 
+#[derive(Clone, Copy)]
 pub struct Pps {
     pub pic_parameter_set_id: u64,
     pub seq_parameter_set_id: u64,
