@@ -157,8 +157,9 @@ impl Playback {
             let packet_rx = per_track_rx.remove(&audio_track_id).unwrap();
             let shutdown = Arc::new(AtomicBool::new(false));
             let shutdown_clone = shutdown.clone();
-            let mut producer = producer; // owned by this thread alone, no sharing needed
+            let mut producer = producer;
             let target_channels = self.audio_output.as_ref().unwrap().channel_count;
+            let track_info = self.track_info.clone();
 
             let handle = std::thread::Builder::new()
                 .name("audio frame getter".to_string())
@@ -166,6 +167,10 @@ impl Playback {
                     decoder
                         .start_decode_session()
                         .expect("failed to start decode session");
+                    track_info
+                        .lock()
+                        .unwrap()
+                        .insert(audio_track_id, decoder.info_strings());
                     while !shutdown_clone.load(Ordering::Relaxed) {
                         let Ok(packet) = packet_rx.recv_timeout(Duration::from_millis(100)) else {
                             continue;
