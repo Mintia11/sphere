@@ -20,6 +20,8 @@ mod tns;
 #[derive(Clone)]
 pub struct Ics {
     pub info: Info,
+    pub section: SectionData,
+    pub scale_factors: ScaleFactors,
     pub pulse: Option<PulseData>,
     pub tns: Option<TNSData>,
     pub gain_control: Option<GainControl>,
@@ -41,14 +43,15 @@ impl Ics {
         let scale_factors = ScaleFactors::parse(reader, global_gain, &info, &section)?;
         let pulse = PulseData::parse(reader, &info)?;
         assert!(pulse.is_none(), "todo: use pulse data");
-        let tns = TNSData::parse(reader)?;
-        assert!(tns.is_none(), "todo: use tns data");
+        let tns = TNSData::parse(reader, &info)?;
         let gain_control = GainControl::parse(reader)?;
         assert!(gain_control.is_none(), "todo: use gain control");
         let spectral = SpectralData::parse(reader, &info, &section, &scale_factors)?;
 
         Ok(Self {
             info,
+            section,
+            scale_factors,
             pulse,
             tns,
             gain_control,

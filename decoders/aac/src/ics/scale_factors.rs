@@ -5,6 +5,7 @@ use crate::{
     tables,
 };
 
+#[derive(Clone)]
 pub struct ScaleFactors {
     pub groups: Vec<Vec<f32>>,
 }

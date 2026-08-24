@@ -8,6 +8,7 @@ pub struct Info {
     pub window_sequence: WindowSequence,
     pub window_shape: bool,
     pub max_sfb: usize,
+    pub scale_factor_grouping: Option<u8>,
     pub window_group_length: Vec<u8>,
     pub sfb_offsets: Vec<Vec<usize>>,
 }
@@ -57,6 +58,7 @@ impl Info {
                     window_sequence,
                     window_shape,
                     max_sfb: max_sfb as usize,
+                    scale_factor_grouping: Some(grouping_bits),
                     window_group_length,
                     sfb_offsets,
                 })
@@ -82,6 +84,7 @@ impl Info {
                     window_sequence,
                     window_shape,
                     max_sfb,
+                    scale_factor_grouping: None,
                     window_group_length: vec![1],
                     sfb_offsets,
                 })

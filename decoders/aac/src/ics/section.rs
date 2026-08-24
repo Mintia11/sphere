@@ -2,10 +2,12 @@ use common::{bit_io::BitReader, byte_io::ByteRead, packet::Error};
 
 use crate::ics::info::{Info, WindowSequence};
 
+#[derive(Clone)]
 pub struct SectionData {
     pub groups: Vec<Vec<Section>>,
 }
 
+#[derive(Clone, Copy)]
 pub struct Section {
     pub cb: u8,
     pub start: usize,
