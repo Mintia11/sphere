@@ -80,7 +80,6 @@ impl SyntaxElement {
                                         continue;
                                     };
 
-                                    println!("g: {g}, sfb: {sfb}");
                                     let ms_used = ms_used[g][sfb];
                                     match section.cb {
                                         13 => {}
