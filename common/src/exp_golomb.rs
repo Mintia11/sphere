@@ -4,7 +4,7 @@ use crate::{bit_io::BitReader, byte_io::ByteRead};
 
 impl<T: ByteRead> BitReader<T> {
     pub fn read_exp(&mut self) -> Result<u64> {
-        let mut leading_zeroes = 0;
+        let mut leading_zeroes = 1;
         while !self.read_bit()? {
             leading_zeroes += 1;
         }
