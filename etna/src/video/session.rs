@@ -17,6 +17,10 @@ impl VideoSession {
     pub fn handle(&self) -> vk::VideoSessionKHR {
         self.handle
     }
+
+    pub fn params(&self) -> vk::VideoSessionParametersKHR {
+        self.params
+    }
 }
 
 impl Device {

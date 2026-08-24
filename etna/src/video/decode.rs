@@ -20,8 +20,9 @@ impl Deref for DecodeCommandBuffer {
 
 impl DecodeCommandBuffer {
     pub fn begin_videocoding(&self, video_session: &VideoSession) {
-        let begin_info =
-            vk::VideoBeginCodingInfoKHR::default().video_session(video_session.handle());
+        let begin_info = vk::VideoBeginCodingInfoKHR::default()
+            .video_session(video_session.handle())
+            .video_session_parameters(video_session.params());
 
         unsafe {
             self.device
