@@ -36,8 +36,26 @@ impl RawNal {
         self.typ
     }
 
-    pub fn data(&self) -> &[u8] {
-        &self.data
+    pub fn strip_emulation_prevention(&self) -> Vec<u8> {
+        let mut rbsp = Vec::with_capacity(self.data.len());
+        let mut i = 0;
+
+        while i < self.data.len() {
+            if i + 2 < self.data.len()
+                && self.data[i] == 0x00
+                && self.data[i + 1] == 0x00
+                && self.data[i + 2] == 0x03
+            {
+                rbsp.push(0x00);
+                rbsp.push(0x00);
+                i += 3;
+            } else {
+                rbsp.push(self.data[i]);
+                i += 1;
+            }
+        }
+
+        rbsp
     }
 }
 
