@@ -1,4 +1,10 @@
-use std::sync::Arc;
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::{Duration, Instant},
+};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::{
@@ -15,11 +21,29 @@ pub struct AudioOutput {
     pub channel_count: u16,
 }
 
+pub static UNDERRUN_COUNT: AtomicUsize = AtomicUsize::new(0);
+
 impl AudioOutput {
     pub fn new(
         sample_rate: u32,
         clock: Arc<AudioClock>,
     ) -> Result<(Self, HeapProd<f32>), AudioError> {
+        std::thread::Builder::new()
+            .name("underrun detector".to_string())
+            .spawn(|| {
+                let mut last = 0;
+                let start = Instant::now();
+                loop {
+                    let now = UNDERRUN_COUNT.load(Ordering::Relaxed);
+                    if now != last {
+                        eprintln!("Underrun #{now} at {:?}", start.elapsed());
+                        last = now;
+                    }
+                    std::thread::sleep(Duration::from_millis(50)); // don't spin
+                }
+            })
+            .unwrap();
+
         let device = cpal::default_host()
             .default_output_device()
             .ok_or(AudioError::NoAudioDevice)?;
@@ -39,6 +63,7 @@ impl AudioOutput {
             move |output: &mut [f32], _| {
                 let filled = consumer.pop_slice(output);
                 if filled < output.len() {
+                    UNDERRUN_COUNT.fetch_add(1, Ordering::Relaxed);
                     output[filled..].fill(0.0);
                 }
                 clock.advance_by_samples(filled / channels as usize);
