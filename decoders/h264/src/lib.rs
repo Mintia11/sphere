@@ -10,15 +10,17 @@ use etna::{
     vk::{self, TaggedStructure},
 };
 
-use crate::{avcc::Avcc, sps::Sps};
+use crate::{avcc::Avcc, pps::Pps, sps::Sps};
 
 mod avcc;
 mod nal;
+mod pps;
 mod sps;
 
 pub struct H264Decoder {
     device: Arc<Device>,
     sps: Option<Sps>,
+    pps: Option<Pps>,
 
     session: Option<VideoSession>,
 }
@@ -28,6 +30,7 @@ impl H264Decoder {
         Self {
             device: device.clone(),
             sps: None,
+            pps: None,
 
             session: None,
         }
@@ -101,6 +104,7 @@ impl PacketDecoder for H264Decoder {
 
         let avcc = Avcc::parse(private_data)?;
         self.sps = Some(Sps::parse(&avcc.sps[0])?);
+        self.pps = Some(Pps::parse(&avcc.pps[0])?);
 
         Ok(())
     }
