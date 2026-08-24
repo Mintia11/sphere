@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
-use ash::vk;
+use ash::vk::{self, Extends, TaggedStructure};
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc, AllocationScheme};
 
 use crate::{Device, error::Error};
 
 pub struct VideoSession {
     handle: vk::VideoSessionKHR,
+    params: vk::VideoSessionParametersKHR,
     memory: Vec<Option<Allocation>>,
 
     device: Arc<Device>,
@@ -19,13 +20,17 @@ impl VideoSession {
 }
 
 impl Device {
-    pub fn create_video_session(
+    pub fn create_video_session<'a, T>(
         self: &Arc<Self>,
         caps: &vk::VideoCapabilitiesKHR,
         profile: &vk::VideoProfileInfoKHR,
         picture_format: vk::Format,
         reference_picture_format: vk::Format,
-    ) -> Result<VideoSession, Error> {
+        params_info: &'a mut T,
+    ) -> Result<VideoSession, Error>
+    where
+        T: Extends<vk::VideoSessionParametersCreateInfoKHR<'a>> + TaggedStructure<'a>,
+    {
         let session_info = vk::VideoSessionCreateInfoKHR::default()
             .max_active_reference_pictures(caps.max_active_reference_pictures)
             .max_coded_extent(caps.max_coded_extent)
@@ -39,6 +44,15 @@ impl Device {
         let handle = unsafe {
             self.video_queue_ext()
                 .create_video_session(&session_info, None)?
+        };
+
+        let params_info = vk::VideoSessionParametersCreateInfoKHR::default()
+            .video_session(handle)
+            .push(params_info);
+
+        let params = unsafe {
+            self.video_queue_ext()
+                .create_video_session_parameters(&params_info, None)?
         };
 
         let len = unsafe {
@@ -82,6 +96,7 @@ impl Device {
 
         Ok(VideoSession {
             handle,
+            params,
             memory,
             device: self.clone(),
         })
