@@ -39,6 +39,7 @@ impl Device {
             .array_layers(1)
             .extent(extent)
             .format(format)
+            .flags(vk::ImageCreateFlags::VIDEO_PROFILE_INDEPENDENT_KHR)
             .image_type(vk::ImageType::TYPE_2D)
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .mip_levels(1)
@@ -243,6 +244,12 @@ impl Image {
 
     pub fn extent(&self) -> vk::Extent3D {
         self.extent
+    }
+
+    pub fn extent_2d(&self) -> vk::Extent2D {
+        vk::Extent2D::default()
+            .width(self.extent.width)
+            .height(self.extent.height)
     }
 
     pub fn current_layout(&self) -> vk::ImageLayout {

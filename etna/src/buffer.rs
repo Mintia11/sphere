@@ -23,7 +23,10 @@ impl Device {
         usage: vk::BufferUsageFlags,
         location: MemoryLocation,
     ) -> Result<Buffer, Error> {
-        let buffer_info = vk::BufferCreateInfo::default().size(size).usage(usage);
+        let buffer_info = vk::BufferCreateInfo::default()
+            .flags(vk::BufferCreateFlags::VIDEO_PROFILE_INDEPENDENT_KHR)
+            .size(size)
+            .usage(usage);
         let buffer = unsafe { self.handle().create_buffer(&buffer_info, None)? };
 
         let alloc_info = AllocationCreateDesc {
@@ -132,6 +135,10 @@ impl Buffer {
 
     pub fn handle(&self) -> vk::Buffer {
         self.handle
+    }
+
+    pub fn size(&self) -> u64 {
+        self.size
     }
 }
 
