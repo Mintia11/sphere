@@ -51,6 +51,7 @@ impl Device {
             khr::video_queue::NAME,
             khr::video_decode_queue::NAME,
             khr::video_decode_h264::NAME,
+            khr::video_maintenance1::NAME,
         ]);
 
         let (physical_device, queue_families) = pick_physical_device(instance, &device_exts)?;
@@ -312,6 +313,9 @@ fn create_device(
     let mut dynamic_rendering =
         vk::PhysicalDeviceDynamicRenderingFeatures::default().dynamic_rendering(true);
 
+    let mut video_maintenance1 =
+        vk::PhysicalDeviceVideoMaintenance1FeaturesKHR::default().video_maintenance1(true);
+
     let graphics_queue_info = vk::DeviceQueueCreateInfo::default()
         .queue_family_index(queue_families.0)
         .queue_priorities(&[1.0]);
@@ -326,7 +330,8 @@ fn create_device(
         .enabled_extension_names(&exts)
         .push(&mut dynamic_rendering)
         .push(&mut synchronization2)
-        .push(&mut buffer_device_address);
+        .push(&mut buffer_device_address)
+        .push(&mut video_maintenance1);
 
     let device = unsafe {
         instance
