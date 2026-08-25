@@ -1,5 +1,7 @@
 //! Packet representation
 
+use std::sync::Arc;
+
 use bytes::Bytes;
 
 use crate::{
@@ -40,8 +42,13 @@ pub struct Packet {
 }
 
 pub enum Frame {
-    Video { image: etna::Image, pts: Timestamp },
-    Audio { samples: AudioBuffer },
+    Video {
+        image: Arc<etna::Image>,
+        pts: Timestamp,
+    },
+    Audio {
+        samples: AudioBuffer,
+    },
 }
 
 pub trait PacketDecoder: Send {

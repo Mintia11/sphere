@@ -36,8 +36,8 @@ pub struct Playback {
     audio_output: Option<AudioOutput>,
 
     video_frame_rx: Option<crossbeam_channel::Receiver<Frame>>,
-    pending_frame: Option<(Image, Timestamp)>,
-    current_frame: Option<Image>,
+    pending_frame: Option<(Arc<Image>, Timestamp)>,
+    current_frame: Option<Arc<Image>>,
 
     decode_threads: Vec<(Arc<AtomicBool>, JoinHandle<()>)>,
 }
@@ -226,7 +226,8 @@ impl Playback {
                         let Ok(packet) = packet_rx.recv_timeout(Duration::from_millis(100)) else {
                             continue;
                         };
-                        if decoder.send_packet(packet).is_err() {
+                        if let Err(e) = decoder.send_packet(packet) {
+                            eprintln!("error while sending packet: {e}");
                             break;
                         }
                         while let Ok(Some(frame)) = decoder.grab_frame() {
