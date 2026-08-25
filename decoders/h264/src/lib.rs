@@ -7,12 +7,14 @@ use common::{
 use etna::{
     Device,
     dynamic_buffer::DynamicBuffer,
+    gpu_allocator::MemoryLocation,
     video::session::VideoSession,
     vk::{self, TaggedStructure},
 };
 
 use crate::{
     avcc::Avcc,
+    dpb::DpbTracker,
     nal::{LenghtPrefixedNal, NalType},
     poc::PocDecoderState,
     pps::Pps,
@@ -36,6 +38,7 @@ pub struct H264Decoder {
     session: Option<VideoSession>,
     input_buffer: DynamicBuffer,
 
+    dpb_tracker: Option<DpbTracker>,
     poc_state: PocDecoderState,
 }
 
@@ -54,6 +57,7 @@ impl H264Decoder {
             )
             .expect("Failed to create input buffer"),
 
+            dpb_tracker: None,
             poc_state: Default::default(),
         }
     }
@@ -74,14 +78,14 @@ impl H264Decoder {
             .push(profile_h264)
     }
 
-    fn get_capabilities(
+    fn get_capabilities<'a>(
         &self,
         profile: &vk::VideoProfileInfoKHR,
     ) -> Result<
         (
-            vk::VideoCapabilitiesKHR<'_>,
-            vk::VideoDecodeCapabilitiesKHR<'_>,
-            vk::VideoDecodeH264CapabilitiesKHR<'_>,
+            vk::VideoCapabilitiesKHR<'a>,
+            vk::VideoDecodeCapabilitiesKHR<'a>,
+            vk::VideoDecodeH264CapabilitiesKHR<'a>,
         ),
         Error,
     > {
@@ -182,8 +186,27 @@ impl PacketDecoder for H264Decoder {
 
         println!("Formats: {formats:#x?}");
 
+        let tracker = DpbTracker::new(
+            sps.max_num_ref_frames as usize,
+            caps.max_dpb_slots as usize,
+            || {
+                Arc::new(
+                    self.device
+                        .create_image(
+                            sps.width() as u32,
+                            sps.height() as u32,
+                            formats[0].format,
+                            vk::ImageUsageFlags::VIDEO_DECODE_DPB_KHR,
+                            MemoryLocation::GpuOnly,
+                        )
+                        .expect("Failed to create dpb image"),
+                )
+            },
+        );
+        self.dpb_tracker = Some(tracker);
+
         let pps = self.pps.unwrap().into();
-        let sps = self.sps.clone().unwrap().into();
+        let sps = sps.clone().into();
 
         let add_info = vk::VideoDecodeH264SessionParametersAddInfoKHR::default()
             .std_pp_ss(std::slice::from_ref(&pps))
