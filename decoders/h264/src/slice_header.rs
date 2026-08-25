@@ -109,4 +109,20 @@ impl SliceHeader {
             PicOrderCnt: [poc; 2],
         }
     }
+
+    pub fn into_reference_info(self, poc: i32) -> vk::native::StdVideoDecodeH264ReferenceInfo {
+        let mut flags: vk::native::StdVideoDecodeH264ReferenceInfoFlags =
+            unsafe { std::mem::zeroed() };
+        flags.set_bottom_field_flag((self.field_pic && self.bottom_field) as u32);
+        flags.set_is_non_existing(false as u32);
+        flags.set_top_field_flag((self.field_pic && !self.bottom_field) as u32);
+        flags.set_used_for_long_term_reference(false as u32);
+
+        vk::native::StdVideoDecodeH264ReferenceInfo {
+            flags,
+            FrameNum: self.frame_num as u16,
+            reserved: 0,
+            PicOrderCnt: [poc; 2],
+        }
+    }
 }
