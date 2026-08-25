@@ -14,13 +14,17 @@ use etna::{
 use crate::{
     avcc::Avcc,
     nal::{LenghtPrefixedNal, NalType},
+    poc::PocDecoderState,
     pps::Pps,
+    slice_header::SliceHeader,
     sps::Sps,
 };
 
 mod avcc;
 mod nal;
+mod poc;
 mod pps;
+mod slice_header;
 mod sps;
 
 pub struct H264Decoder {
@@ -30,6 +34,8 @@ pub struct H264Decoder {
 
     session: Option<VideoSession>,
     input_buffer: DynamicBuffer,
+
+    poc_state: PocDecoderState,
 }
 
 impl H264Decoder {
@@ -46,6 +52,8 @@ impl H264Decoder {
                 32 * 1024,
             )
             .expect("Failed to create input buffer"),
+
+            poc_state: Default::default(),
         }
     }
 
@@ -200,8 +208,32 @@ impl PacketDecoder for H264Decoder {
         let Some(sps) = &self.sps else {
             return Ok(());
         };
+        let Some(pps) = &self.pps else {
+            return Ok(());
+        };
 
         let nals = LenghtPrefixedNal::parse(packet.data, 4)?;
+        let (picture_info, nal) = nals
+            .iter()
+            .find(|nal| matches!(nal.typ(), NalType::Idr | NalType::NonIdr))
+            .map(|nal| {
+                (
+                    SliceHeader::parse(nal.data(), sps, pps, nal.typ() == NalType::Idr)
+                        .expect("failed to parse slice header"),
+                    nal,
+                )
+            })
+            .expect("picture nal not found");
+
+        let poc = self.poc_state.compute_and_update(
+            sps,
+            &picture_info,
+            nal.typ() == NalType::Idr,
+            nal.ref_idc(),
+        );
+        let picture_info =
+            picture_info.into_picture_info(sps, nal.typ() == NalType::Idr, nal.ref_idc() != 0, poc);
+
         let mut annex_b_data = Vec::new();
         for nal in nals {
             match nal.typ() {
