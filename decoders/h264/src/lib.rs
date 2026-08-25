@@ -21,6 +21,7 @@ use crate::{
 };
 
 mod avcc;
+mod dpb;
 mod nal;
 mod poc;
 mod pps;
