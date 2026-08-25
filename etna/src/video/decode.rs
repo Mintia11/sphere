@@ -1,9 +1,9 @@
 use std::{ops::Deref, sync::Arc};
 
-use ash::vk;
+use ash::vk::{self, Extends, TaggedStructure};
 
 use crate::{
-    Device, buffer::Buffer, command_buffer::CommandBuffer, error::Error,
+    Device, Image, buffer::Buffer, command_buffer::CommandBuffer, error::Error,
     video::session::VideoSession,
 };
 
@@ -19,8 +19,13 @@ impl Deref for DecodeCommandBuffer {
 }
 
 impl DecodeCommandBuffer {
-    pub fn begin_videocoding(&self, video_session: &VideoSession) {
+    pub fn begin_videocoding(
+        &self,
+        video_session: &VideoSession,
+        reference_slots: &[vk::VideoReferenceSlotInfoKHR],
+    ) {
         let begin_info = vk::VideoBeginCodingInfoKHR::default()
+            .reference_slots(reference_slots)
             .video_session(video_session.handle())
             .video_session_parameters(video_session.params());
 
@@ -31,8 +36,40 @@ impl DecodeCommandBuffer {
         }
     }
 
-    pub fn decode(&self) {
-        let decode_info = vk::VideoDecodeInfoKHR::default();
+    pub fn reset_session(&self) {
+        let coding_control_info =
+            vk::VideoCodingControlInfoKHR::default().flags(vk::VideoCodingControlFlagsKHR::RESET);
+
+        unsafe {
+            self.device
+                .video_queue_ext()
+                .cmd_control_video_coding(self.handle, &coding_control_info);
+        }
+    }
+
+    pub fn decode<'a, T>(
+        &self,
+        src: &Buffer,
+        dst: &Image,
+        reference_slots: &'a [vk::VideoReferenceSlotInfoKHR],
+        setup_reference_slot: &'a vk::VideoReferenceSlotInfoKHR,
+        next: &'a mut T,
+    ) where
+        T: Extends<vk::VideoDecodeInfoKHR<'a>> + TaggedStructure<'a>,
+    {
+        let decode_info = vk::VideoDecodeInfoKHR::default()
+            .dst_picture_resource(
+                vk::VideoPictureResourceInfoKHR::default()
+                    .base_array_layer(0)
+                    .coded_extent(dst.extent_2d())
+                    .image_view_binding(dst.view()),
+            )
+            .reference_slots(reference_slots)
+            .setup_reference_slot(setup_reference_slot)
+            .src_buffer(src.handle())
+            .src_buffer_offset(0)
+            .src_buffer_range(src.size())
+            .push(next);
 
         unsafe {
             self.device
