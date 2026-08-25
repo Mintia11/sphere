@@ -2,9 +2,10 @@ use bytes::{Buf, Bytes};
 use common::{bit_io::BitReader, byte_io::ByteReader, packet::Error};
 use derive_try_from_primitive::TryFromPrimitive;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RawNal {
     typ: NalType,
+    ref_idc: u64,
     raw_hdr: u8,
     data: Bytes,
 }
@@ -22,13 +23,14 @@ impl RawNal {
             ));
         }
 
-        let _ref_idc = reader.read_bits(2)?;
+        let ref_idc = reader.read_bits(2)?;
         let nal_unit_type = reader.read_bits(5)?;
         let typ = NalType::try_from(nal_unit_type)
             .map_err(|e| Error::InvalidData(format!("Invalid nal type: {e:#x}")))?;
 
         Ok(RawNal {
             typ,
+            ref_idc,
             raw_hdr: bytes[0],
             data: bytes.slice(1..),
         })
@@ -36,6 +38,10 @@ impl RawNal {
 
     pub fn typ(&self) -> NalType {
         self.typ
+    }
+
+    pub fn ref_idc(&self) -> u64 {
+        self.ref_idc
     }
 
     pub fn strip_emulation_prevention(&self) -> Vec<u8> {
@@ -61,7 +67,7 @@ impl RawNal {
     }
 }
 
-#[derive(Debug, TryFromPrimitive, Clone, Copy)]
+#[derive(Debug, TryFromPrimitive, Clone, Copy, PartialEq, Eq)]
 #[repr(u64)]
 pub enum NalType {
     NonIdr = 0x1,
@@ -71,7 +77,7 @@ pub enum NalType {
     Pps = 0x8,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LenghtPrefixedNal {
     inner: RawNal,
 }
@@ -106,6 +112,14 @@ impl LenghtPrefixedNal {
 
     pub fn typ(&self) -> NalType {
         self.inner.typ
+    }
+
+    pub fn ref_idc(&self) -> u64 {
+        self.inner.ref_idc
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.inner.data
     }
 
     pub fn into_annex_b(self) -> Vec<u8> {
