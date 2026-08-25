@@ -6,6 +6,7 @@ use common::{
 };
 use etna::{
     Device,
+    dynamic_buffer::DynamicBuffer,
     video::session::VideoSession,
     vk::{self, TaggedStructure},
 };
@@ -28,6 +29,7 @@ pub struct H264Decoder {
     pps: Option<Pps>,
 
     session: Option<VideoSession>,
+    input_buffer: DynamicBuffer,
 }
 
 impl H264Decoder {
@@ -38,6 +40,12 @@ impl H264Decoder {
             pps: None,
 
             session: None,
+            input_buffer: DynamicBuffer::new(
+                device,
+                vk::BufferUsageFlags::VIDEO_DECODE_SRC_KHR,
+                32 * 1024,
+            )
+            .expect("Failed to create input buffer"),
         }
     }
 
@@ -194,7 +202,6 @@ impl PacketDecoder for H264Decoder {
         };
 
         let nals = LenghtPrefixedNal::parse(packet.data, 4)?;
-        println!("{nals:?}");
         let mut annex_b_data = Vec::new();
         for nal in nals {
             match nal.typ() {
@@ -202,6 +209,10 @@ impl PacketDecoder for H264Decoder {
                 _ => annex_b_data.extend(nal.into_annex_b()),
             }
         }
+
+        self.input_buffer
+            .ensure_capacity(&self.device, annex_b_data.len().next_multiple_of(256))?;
+        self.input_buffer.write(0, &annex_b_data)?;
 
         Ok(())
     }
