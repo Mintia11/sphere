@@ -64,10 +64,14 @@ impl RawNal {
 #[derive(Debug, TryFromPrimitive, Clone, Copy)]
 #[repr(u64)]
 pub enum NalType {
+    NonIdr = 0x1,
+    Idr = 0x5,
+    Sei = 0x6,
     Sps = 0x7,
     Pps = 0x8,
 }
 
+#[derive(Debug)]
 pub struct LenghtPrefixedNal {
     inner: RawNal,
 }
@@ -98,6 +102,10 @@ impl LenghtPrefixedNal {
         }
 
         Ok(nals)
+    }
+
+    pub fn typ(&self) -> NalType {
+        self.inner.typ
     }
 
     pub fn into_annex_b(self) -> Vec<u8> {
