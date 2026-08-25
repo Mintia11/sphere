@@ -10,7 +10,12 @@ use etna::{
     vk::{self, TaggedStructure},
 };
 
-use crate::{avcc::Avcc, pps::Pps, sps::Sps};
+use crate::{
+    avcc::Avcc,
+    nal::{LenghtPrefixedNal, NalType},
+    pps::Pps,
+    sps::Sps,
+};
 
 mod avcc;
 mod nal;
@@ -184,12 +189,19 @@ impl PacketDecoder for H264Decoder {
     }
 
     fn send_packet(&mut self, packet: Packet) -> Result<(), Error> {
-        let cmd = self.device.allocate_decode_command_buffer()?;
-        cmd.begin()?;
-        cmd.begin_videocoding(self.session.as_ref().unwrap());
-        cmd.decode();
-        cmd.end_videocoding();
-        cmd.end()?;
+        let Some(sps) = &self.sps else {
+            return Ok(());
+        };
+
+        let nals = LenghtPrefixedNal::parse(packet.data, 4)?;
+        println!("{nals:?}");
+        let mut annex_b_data = Vec::new();
+        for nal in nals {
+            match nal.typ() {
+                NalType::Sps | NalType::Pps | NalType::Sei => {}
+                _ => annex_b_data.extend(nal.into_annex_b()),
+            }
+        }
 
         Ok(())
     }
