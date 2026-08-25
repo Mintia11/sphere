@@ -21,7 +21,7 @@ impl RawNal {
             ));
         }
 
-        let _ref_idc = reader.read_bits(3)?;
+        let _ref_idc = reader.read_bits(2)?;
         let nal_unit_type = reader.read_bits(5)?;
         let typ = NalType::try_from(nal_unit_type)
             .map_err(|e| Error::InvalidData(format!("Invalid nal type: {e:#x}")))?;
@@ -62,6 +62,6 @@ impl RawNal {
 #[derive(Debug, TryFromPrimitive, Clone, Copy)]
 #[repr(u64)]
 pub enum NalType {
-    Sps = 0xE,
-    Pps = 0x10,
+    Sps = 0x7,
+    Pps = 0x8,
 }
