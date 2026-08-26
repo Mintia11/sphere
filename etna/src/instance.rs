@@ -7,11 +7,14 @@ use ash::{
     Entry, ext, khr,
     vk::{self, TaggedStructure},
 };
+use raw_window_handle::{HandleError, HasWindowHandle, RawWindowHandle};
 use snafu::{ResultExt, Snafu};
 
+use crate::surface::Surface;
+
 pub struct Instance {
-    entry: Entry,
-    instance: ash::Instance,
+    pub entry: Entry,
+    pub instance: ash::Instance,
 
     debug_utils_ext: Option<ext::debug_utils::Instance>,
     debug_messenger: Option<vk::DebugUtilsMessengerEXT>,
@@ -28,6 +31,8 @@ const INSTANCE_EXTENSIONS: &[&CStr] = &[
     khr::get_surface_capabilities2::NAME,
     khr::surface_maintenance1::NAME,
     ext::surface_maintenance1::NAME,
+    #[cfg(windows)]
+    khr::win32_surface::NAME,
 ];
 
 unsafe extern "system" fn vulkan_debug_callback(
@@ -258,6 +263,28 @@ impl Instance {
             debug_messenger,
         })
     }
+
+    pub fn create_surface(&self, window: &impl HasWindowHandle) -> Result<Surface, InstanceError> {
+        let handle = window
+            .window_handle()
+            .map_err(|_| InstanceError::WindowHandle)?;
+        let raw = handle.as_raw();
+
+        let handle = match raw {
+            RawWindowHandle::Win32(raw) => {
+                let create_info = vk::Win32SurfaceCreateInfoKHR::default()
+                    .hinstance(raw.hinstance.unwrap().get())
+                    .hwnd(raw.hwnd.get());
+                let ext = khr::win32_surface::Instance::load(&self.entry, &self.instance);
+
+                unsafe { ext.create_win32_surface(&create_info, None) }.context(VulkanSnafu)?
+            }
+            x => todo!("unimplemented platform handle: {x:?}"),
+        };
+        let ext = khr::surface::Instance::load(&self.entry, &self.instance);
+
+        Ok(Surface { handle, ext })
+    }
 }
 
 impl Drop for Instance {
@@ -286,4 +313,7 @@ pub enum InstanceError {
     FromBytesUntilNull {
         source: std::ffi::FromBytesUntilNulError,
     },
+
+    #[snafu(display("Failed to get window handle"))]
+    WindowHandle,
 }
