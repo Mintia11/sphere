@@ -6,5 +6,8 @@ edition = "2024"
 [dependencies]
 ash = { git = "https://github.com/ash-rs/ash", rev = "f4c2ca3" }
 gpu-allocator = { path = "../vendor/gpu-allocator" }
+log = "0.4.34"
+profiling = "1.0.18"
 raw-window-handle = "0.6.2"
+snafu = "0.9.2"
 thiserror.workspace = true
