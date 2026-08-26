@@ -7,7 +7,7 @@ use ash::{
     Entry, ext, khr,
     vk::{self, TaggedStructure},
 };
-use raw_window_handle::{HandleError, HasWindowHandle, RawWindowHandle};
+use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use snafu::{ResultExt, Snafu};
 
 use crate::surface::Surface;
@@ -33,6 +33,21 @@ const INSTANCE_EXTENSIONS: &[&CStr] = &[
     ext::surface_maintenance1::NAME,
     #[cfg(windows)]
     khr::win32_surface::NAME,
+];
+
+const DEVICE_EXTENSIONS: &[&CStr] = &[
+    khr::swapchain::NAME,
+    khr::swapchain_maintenance1::NAME,
+    ext::swapchain_maintenance1::NAME,
+    ext::shader_object::NAME,
+    ext::descriptor_heap::NAME,
+    khr::video_queue::NAME,
+    khr::video_decode_queue::NAME,
+    khr::video_decode_av1::NAME,
+    khr::video_decode_h264::NAME,
+    khr::video_decode_h265::NAME,
+    khr::dynamic_rendering::NAME,
+    khr::video_maintenance1::NAME,
 ];
 
 unsafe extern "system" fn vulkan_debug_callback(
@@ -285,6 +300,118 @@ impl Instance {
 
         Ok(Surface { handle, ext })
     }
+
+    pub fn pick_physical_device(
+        &self,
+        surface: Option<&Surface>,
+    ) -> Result<vk::PhysicalDevice, InstanceError> {
+        let devices = unsafe { self.instance.enumerate_physical_devices() }.context(VulkanSnafu)?;
+
+        log::info!("Picking vulkan device:");
+        for (i, &physical_device) in devices.iter().enumerate() {
+            let mut prop = vk::PhysicalDeviceProperties2::default();
+            unsafe {
+                self.instance
+                    .get_physical_device_properties2(physical_device, &mut prop);
+            }
+
+            let name = prop
+                .properties
+                .device_name_as_c_str()
+                .context(FromBytesUntilNullSnafu)?;
+
+            log::info!(
+                "    GPU {i}: {} v{}.{}.{} ({:?})",
+                name.to_string_lossy(),
+                vk::api_version_major(prop.properties.api_version),
+                vk::api_version_minor(prop.properties.api_version),
+                vk::api_version_patch(prop.properties.api_version),
+                prop.properties.device_type,
+            );
+
+            let queue_family_count = unsafe {
+                self.instance
+                    .get_physical_device_queue_family_properties2_len(physical_device)
+            };
+
+            if let Some(surface) = surface {
+                let mut supports_present = false;
+                for idx in 0..(queue_family_count as u32) {
+                    if unsafe {
+                        surface.ext.get_physical_device_surface_support(
+                            physical_device,
+                            idx,
+                            surface.handle,
+                        )
+                    }
+                    .context(VulkanSnafu)?
+                    {
+                        supports_present = true;
+                    }
+                }
+
+                if !supports_present {
+                    continue;
+                }
+            }
+
+            let mut swapchain_maintenance1 =
+                vk::PhysicalDeviceSwapchainMaintenance1FeaturesKHR::default();
+            let mut video_maintenance1 = vk::PhysicalDeviceVideoMaintenance1FeaturesKHR::default();
+            let mut video_maintenance2 = vk::PhysicalDeviceVideoMaintenance2FeaturesKHR::default();
+            let mut vulkan_11 = vk::PhysicalDeviceVulkan11Features::default();
+            let mut vulkan_13 = vk::PhysicalDeviceVulkan13Features::default();
+            let mut shader_object = vk::PhysicalDeviceShaderObjectFeaturesEXT::default();
+            let mut descriptor_heap = vk::PhysicalDeviceDescriptorHeapFeaturesEXT::default();
+            let mut features = vk::PhysicalDeviceFeatures2::default()
+                .push(&mut descriptor_heap)
+                .push(&mut shader_object)
+                .push(&mut vulkan_13)
+                .push(&mut vulkan_11)
+                .push(&mut video_maintenance1)
+                .push(&mut video_maintenance2)
+                .push(&mut swapchain_maintenance1);
+
+            unsafe {
+                self.instance
+                    .get_physical_device_features2(physical_device, &mut features);
+            }
+
+            if descriptor_heap.descriptor_heap == 0
+                || shader_object.shader_object == 0
+                || vulkan_13.dynamic_rendering == 0
+                || vulkan_11.sampler_ycbcr_conversion == 0
+                || video_maintenance2.video_maintenance2 == 0
+                || video_maintenance1.video_maintenance1 == 0
+                || swapchain_maintenance1.swapchain_maintenance1 == 0
+            {
+                log::debug!("    Skipping GPU {i}: Required feature(s) missing");
+                continue;
+            }
+
+            let supported_exts = unsafe {
+                self.instance
+                    .enumerate_device_extension_properties(physical_device)
+            }
+            .context(VulkanSnafu)?;
+
+            let has_ext = |ext_name: &std::ffi::CStr| {
+                supported_exts
+                    .iter()
+                    .any(|e| e.extension_name_as_c_str().ok() == Some(ext_name))
+            };
+
+            if DEVICE_EXTENSIONS.iter().any(|ext| !has_ext(ext)) {
+                log::debug!("    Skipping GPU {i}: Required extension(s) missing");
+                continue;
+            }
+
+            return Ok(physical_device);
+        }
+
+        log::error!("Failed to find a suitable device!");
+        snafu::whatever!("Failed to find a suitable device")
+    }
 }
 
 impl Drop for Instance {
@@ -316,4 +443,7 @@ pub enum InstanceError {
 
     #[snafu(display("Failed to get window handle"))]
     WindowHandle,
+
+    #[snafu(whatever)]
+    Whatever { message: String },
 }

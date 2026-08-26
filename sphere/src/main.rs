@@ -23,6 +23,9 @@ fn main() {
     let surface = instance
         .create_surface(&window)
         .expect("Failed to create surface");
+    let physical_device = instance
+        .pick_physical_device(Some(&surface))
+        .expect("Failed to pick physical device");
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
