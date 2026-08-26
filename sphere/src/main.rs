@@ -26,6 +26,9 @@ fn main() {
     let physical_device = instance
         .pick_physical_device(Some(&surface))
         .expect("Failed to pick physical device");
+    let device = instance
+        .create_device(physical_device, Some(&surface))
+        .expect("Failed to create logical device");
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {

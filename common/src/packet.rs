@@ -64,9 +64,6 @@ pub enum Error {
     #[error("Encountered invalid data: {0}")]
     InvalidData(String),
 
-    #[error("Vulkan error: {0}")]
-    VulkanError(#[from] etna::vk::Result),
-
     #[error("Error while doing huffman decoding: {0}")]
     HuffmanError(#[from] huffman::Error),
 }
