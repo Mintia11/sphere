@@ -386,6 +386,7 @@ impl Instance {
             if descriptor_heap.descriptor_heap == 0
                 || shader_object.shader_object == 0
                 || vulkan_13.dynamic_rendering == 0
+                || vulkan_13.synchronization2 == 0
                 || vulkan_11.sampler_ycbcr_conversion == 0
                 || video_maintenance2.video_maintenance2 == 0
                 || video_maintenance1.video_maintenance1 == 0
