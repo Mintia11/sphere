@@ -1,7 +1,5 @@
 //! Packet representation
 
-use std::sync::Arc;
-
 use bytes::Bytes;
 
 use crate::{
@@ -42,13 +40,7 @@ pub struct Packet {
 }
 
 pub enum Frame {
-    Video {
-        image: Arc<etna::Image>,
-        pts: Timestamp,
-    },
-    Audio {
-        samples: AudioBuffer,
-    },
+    Audio { samples: AudioBuffer },
 }
 
 pub trait PacketDecoder: Send {
@@ -74,9 +66,6 @@ pub enum Error {
 
     #[error("Vulkan error: {0}")]
     VulkanError(#[from] etna::vk::Result),
-
-    #[error("Etna error: {0}")]
-    EtnaError(#[from] etna::error::Error),
 
     #[error("Error while doing huffman decoding: {0}")]
     HuffmanError(#[from] huffman::Error),
