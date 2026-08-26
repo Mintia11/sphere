@@ -365,6 +365,7 @@ impl Instance {
             let mut video_maintenance1 = vk::PhysicalDeviceVideoMaintenance1FeaturesKHR::default();
             let mut video_maintenance2 = vk::PhysicalDeviceVideoMaintenance2FeaturesKHR::default();
             let mut vulkan_11 = vk::PhysicalDeviceVulkan11Features::default();
+            let mut vulkan_12 = vk::PhysicalDeviceVulkan12Features::default();
             let mut vulkan_13 = vk::PhysicalDeviceVulkan13Features::default();
             let mut shader_object = vk::PhysicalDeviceShaderObjectFeaturesEXT::default();
             let mut descriptor_heap = vk::PhysicalDeviceDescriptorHeapFeaturesEXT::default();
@@ -372,6 +373,7 @@ impl Instance {
                 .push(&mut descriptor_heap)
                 .push(&mut shader_object)
                 .push(&mut vulkan_13)
+                .push(&mut vulkan_12)
                 .push(&mut vulkan_11)
                 .push(&mut video_maintenance1)
                 .push(&mut video_maintenance2)
@@ -387,6 +389,7 @@ impl Instance {
                 || shader_object.shader_object == 0
                 || vulkan_13.dynamic_rendering == 0
                 || vulkan_13.synchronization2 == 0
+                || vulkan_12.timeline_semaphore == 0
                 || vulkan_11.sampler_ycbcr_conversion == 0
                 || video_maintenance2.video_maintenance2 == 0
                 || video_maintenance1.video_maintenance1 == 0
