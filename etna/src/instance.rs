@@ -38,6 +38,8 @@ const INSTANCE_EXTENSIONS: &[&CStr] = &[
 const DEVICE_EXTENSIONS: &[&CStr] = &[
     khr::swapchain::NAME,
     khr::swapchain_maintenance1::NAME,
+    khr::swapchain_mutable_format::NAME,
+    khr::internally_synchronized_queues::NAME,
     ext::swapchain_maintenance1::NAME,
     ext::shader_object::NAME,
     ext::descriptor_heap::NAME,
@@ -48,6 +50,7 @@ const DEVICE_EXTENSIONS: &[&CStr] = &[
     khr::video_decode_h265::NAME,
     khr::dynamic_rendering::NAME,
     khr::video_maintenance1::NAME,
+    khr::video_maintenance2::NAME,
 ];
 
 unsafe extern "system" fn vulkan_debug_callback(
@@ -355,6 +358,8 @@ impl Instance {
                 }
             }
 
+            let mut internally_synchronized_queues =
+                vk::PhysicalDeviceInternallySynchronizedQueuesFeaturesKHR::default();
             let mut swapchain_maintenance1 =
                 vk::PhysicalDeviceSwapchainMaintenance1FeaturesKHR::default();
             let mut video_maintenance1 = vk::PhysicalDeviceVideoMaintenance1FeaturesKHR::default();
@@ -370,7 +375,8 @@ impl Instance {
                 .push(&mut vulkan_11)
                 .push(&mut video_maintenance1)
                 .push(&mut video_maintenance2)
-                .push(&mut swapchain_maintenance1);
+                .push(&mut swapchain_maintenance1)
+                .push(&mut internally_synchronized_queues);
 
             unsafe {
                 self.instance
@@ -384,6 +390,7 @@ impl Instance {
                 || video_maintenance2.video_maintenance2 == 0
                 || video_maintenance1.video_maintenance1 == 0
                 || swapchain_maintenance1.swapchain_maintenance1 == 0
+                || internally_synchronized_queues.internally_synchronized_queues == 0
             {
                 log::debug!("    Skipping GPU {i}: Required feature(s) missing");
                 continue;
