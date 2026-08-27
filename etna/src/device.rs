@@ -249,9 +249,9 @@ impl Device {
 }
 
 impl DestroyWithInstance for Device {
-    fn destroy(&mut self, _instance: &ash::Instance) {
-        self.graphics_pool.destroy(&self.device);
-        self.decode_pool.destroy(&self.device);
+    fn destroy(&mut self, _instance: &Instance) {
+        self.graphics_pool.destroy(&self);
+        self.decode_pool.destroy(&self);
 
         unsafe { self.device.destroy_device(None) };
     }

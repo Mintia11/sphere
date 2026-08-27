@@ -1,7 +1,7 @@
 use ash::vk::{self, TaggedStructure};
 use snafu::{ResultExt, Snafu};
 
-use crate::destroy::DestroyWithDevice;
+use crate::{destroy::DestroyWithDevice, device::Device};
 
 pub struct TimelineSemaphore {
     pub handle: vk::Semaphore,
@@ -26,9 +26,34 @@ impl TimelineSemaphore {
 }
 
 impl DestroyWithDevice for TimelineSemaphore {
-    fn destroy(&mut self, device: &ash::Device) {
+    fn destroy(&mut self, device: &Device) {
         unsafe {
-            device.destroy_semaphore(self.handle, None);
+            device.device.destroy_semaphore(self.handle, None);
+        }
+    }
+}
+
+pub struct BinarySemaphore {
+    pub handle: vk::Semaphore,
+}
+
+impl BinarySemaphore {
+    pub fn new(device: &ash::Device) -> Result<Self, SyncError> {
+        let mut info =
+            vk::SemaphoreTypeCreateInfo::default().semaphore_type(vk::SemaphoreType::BINARY);
+
+        let create_info = vk::SemaphoreCreateInfo::default().push(&mut info);
+
+        let handle = unsafe { device.create_semaphore(&create_info, None) }.context(VulkanSnafu)?;
+
+        Ok(BinarySemaphore { handle })
+    }
+}
+
+impl DestroyWithDevice for BinarySemaphore {
+    fn destroy(&mut self, device: &Device) {
+        unsafe {
+            device.device.destroy_semaphore(self.handle, None);
         }
     }
 }

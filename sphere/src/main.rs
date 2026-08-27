@@ -35,9 +35,6 @@ fn main() {
     let mut device = Device::new(&instance, physical_device, Some(&surface))
         .expect("Failed to create logical device");
 
-    device.destroy(&instance.instance);
-    surface.destroy(&instance.instance);
-
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -51,4 +48,7 @@ fn main() {
             }
         }
     }
+
+    device.destroy(&instance.instance);
+    surface.destroy(&instance.instance);
 }
