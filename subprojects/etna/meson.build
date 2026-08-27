@@ -7,6 +7,7 @@ project(
 
 cc = meson.get_compiler('c')
 vulkan_dep = dependency('vulkan')
+volk_dep = dependency('volk')
 
 if get_option('buildtype') == 'debug'
     if cc.get_id() in ['clang', 'gcc']
@@ -24,7 +25,7 @@ etna_inc = include_directories('src')
 etna_lib = static_library(
     'etna',
     etna_sources,
-    dependencies: [vulkan_dep],
+    dependencies: [vulkan_dep, volk_dep],
     include_directories: etna_inc,
     install: false,
 )
