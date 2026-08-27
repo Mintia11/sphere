@@ -1,17 +1,15 @@
 use std::{
     collections::BTreeMap,
     ffi::{CStr, c_void},
-    sync::Arc,
 };
 
 use ash::{
     Entry, ext, khr,
-    vk::{self, QueueFlags, TaggedStructure},
+    vk::{self, TaggedStructure},
 };
-use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use snafu::{ResultExt, Snafu};
 
-use crate::{device::Device, surface::Surface};
+use crate::{device::DEVICE_EXTENSIONS, surface::Surface};
 
 pub struct Instance {
     pub entry: Entry,
@@ -34,24 +32,6 @@ const INSTANCE_EXTENSIONS: &[&CStr] = &[
     ext::surface_maintenance1::NAME,
     #[cfg(windows)]
     khr::win32_surface::NAME,
-];
-
-const DEVICE_EXTENSIONS: &[&CStr] = &[
-    khr::swapchain::NAME,
-    khr::swapchain_maintenance1::NAME,
-    khr::swapchain_mutable_format::NAME,
-    khr::internally_synchronized_queues::NAME,
-    ext::swapchain_maintenance1::NAME,
-    ext::shader_object::NAME,
-    ext::descriptor_heap::NAME,
-    khr::video_queue::NAME,
-    khr::video_decode_queue::NAME,
-    khr::video_decode_av1::NAME,
-    khr::video_decode_h264::NAME,
-    khr::video_decode_h265::NAME,
-    khr::dynamic_rendering::NAME,
-    khr::video_maintenance1::NAME,
-    khr::video_maintenance2::NAME,
 ];
 
 unsafe extern "system" fn vulkan_debug_callback(
@@ -284,36 +264,6 @@ impl Instance {
     }
 
     #[profiling::function]
-    pub fn create_surface(
-        self: &Arc<Self>,
-        window: &impl HasWindowHandle,
-    ) -> Result<Surface, InstanceError> {
-        let handle = window
-            .window_handle()
-            .map_err(|_| InstanceError::WindowHandle)?;
-        let raw = handle.as_raw();
-
-        let handle = match raw {
-            RawWindowHandle::Win32(raw) => {
-                let create_info = vk::Win32SurfaceCreateInfoKHR::default()
-                    .hinstance(raw.hinstance.unwrap().get())
-                    .hwnd(raw.hwnd.get());
-                let ext = khr::win32_surface::Instance::load(&self.entry, &self.instance);
-
-                unsafe { ext.create_win32_surface(&create_info, None) }.context(VulkanSnafu)?
-            }
-            x => todo!("unimplemented platform handle: {x:?}"),
-        };
-        let ext = khr::surface::Instance::load(&self.entry, &self.instance);
-
-        Ok(Surface {
-            handle,
-            ext,
-            _instance: self.clone(),
-        })
-    }
-
-    #[profiling::function]
     pub fn pick_physical_device(
         &self,
         surface: Option<&Surface>,
@@ -433,186 +383,6 @@ impl Instance {
         log::error!("Failed to find a suitable device!");
         snafu::whatever!("Failed to find a suitable device")
     }
-
-    #[profiling::function]
-    pub fn create_device(
-        self: &Arc<Self>,
-        physical_device: vk::PhysicalDevice,
-        surface: Option<&Surface>,
-    ) -> Result<Device, InstanceError> {
-        let mut internally_synchronized_queues =
-            vk::PhysicalDeviceInternallySynchronizedQueuesFeaturesKHR::default()
-                .internally_synchronized_queues(true);
-        let mut swapchain_maintenance1 =
-            vk::PhysicalDeviceSwapchainMaintenance1FeaturesKHR::default()
-                .swapchain_maintenance1(true);
-        let mut video_maintenance1 =
-            vk::PhysicalDeviceVideoMaintenance1FeaturesKHR::default().video_maintenance1(true);
-        let mut video_maintenance2 =
-            vk::PhysicalDeviceVideoMaintenance2FeaturesKHR::default().video_maintenance2(true);
-        let mut vulkan_11 =
-            vk::PhysicalDeviceVulkan11Features::default().sampler_ycbcr_conversion(true);
-        let mut vulkan_12 = vk::PhysicalDeviceVulkan12Features::default().timeline_semaphore(true);
-        let mut vulkan_13 = vk::PhysicalDeviceVulkan13Features::default()
-            .dynamic_rendering(true)
-            .synchronization2(true);
-        let mut shader_object =
-            vk::PhysicalDeviceShaderObjectFeaturesEXT::default().shader_object(true);
-        let mut descriptor_heap =
-            vk::PhysicalDeviceDescriptorHeapFeaturesEXT::default().descriptor_heap(true);
-        let mut features = vk::PhysicalDeviceFeatures2::default();
-
-        let queue_family_count = unsafe {
-            self.instance
-                .get_physical_device_queue_family_properties2_len(physical_device)
-        };
-        let mut video_infos =
-            vec![vk::QueueFamilyVideoPropertiesKHR::default(); queue_family_count];
-        let mut queue_families: Vec<_> = video_infos
-            .iter_mut()
-            .map(|video_info| vk::QueueFamilyProperties2::default().push(video_info))
-            .collect();
-
-        unsafe {
-            self.instance
-                .get_physical_device_queue_family_properties2(physical_device, &mut queue_families);
-        }
-
-        let queue_families: Vec<_> = queue_families
-            .iter()
-            .map(|f| f.queue_family_properties)
-            .collect();
-
-        let mut graphics_queue = None;
-        let mut decode_queue = None;
-
-        log::debug!("Queue families supported by device:");
-        for (i, (queue_family, video_info)) in
-            queue_families.iter().zip(video_infos.iter()).enumerate()
-        {
-            log::debug!(
-                "    {}: {:?} num {}",
-                i,
-                queue_family.queue_flags,
-                queue_family.queue_count
-            );
-            if queue_family
-                .queue_flags
-                .contains(vk::QueueFlags::VIDEO_DECODE_KHR)
-            {
-                log::debug!(
-                    "        supported ops: {:?}",
-                    video_info.video_codec_operations
-                );
-            }
-
-            if queue_family.queue_flags.contains(QueueFlags::GRAPHICS) && graphics_queue.is_none() {
-                if let Some(surface) = surface {
-                    if !unsafe {
-                        surface.ext.get_physical_device_surface_support(
-                            physical_device,
-                            i as u32,
-                            surface.handle,
-                        )
-                    }
-                    .context(VulkanSnafu)?
-                    {
-                        log::error!(
-                            "Graphics queue doesn't support presenting to the specified surface!"
-                        );
-                        snafu::whatever!(
-                            "Graphics queue doesn't support presenting to the specified surface!"
-                        )
-                    }
-                }
-
-                graphics_queue = Some(i as u32);
-            }
-
-            if video_info.video_codec_operations.contains(
-                vk::VideoCodecOperationFlagsKHR::DECODE_H264
-                    | vk::VideoCodecOperationFlagsKHR::DECODE_H265
-                    | vk::VideoCodecOperationFlagsKHR::DECODE_AV1,
-            ) && decode_queue.is_none()
-            {
-                decode_queue = Some(i as u32);
-            }
-        }
-
-        let supported_exts = unsafe {
-            self.instance
-                .enumerate_device_extension_properties(physical_device)
-        }
-        .context(VulkanSnafu)?;
-
-        log::debug!("Available device extensions:");
-        for ext in supported_exts {
-            let name = ext
-                .extension_name_as_c_str()
-                .context(FromBytesUntilNullSnafu)?
-                .to_string_lossy();
-            log::debug!("    {name}");
-        }
-
-        let mut queue_infos = Vec::new();
-        let graphics_queue = graphics_queue.ok_or_else(|| InstanceError::Whatever {
-            message: "did not find a graphics capable queue".to_string(),
-        })?;
-        let decode_queue = decode_queue.ok_or_else(|| InstanceError::Whatever {
-            message: "did not find a decode capable queue".to_string(),
-        })?;
-
-        let graphics_queue_priorities = [1.0, 1.0]; // one graphics one transfer
-        queue_infos.push(
-            vk::DeviceQueueCreateInfo::default()
-                .flags(vk::DeviceQueueCreateFlags::INTERNALLY_SYNCHRONIZED_KHR)
-                .queue_family_index(graphics_queue)
-                .queue_priorities(&graphics_queue_priorities),
-        );
-        let decode_queue_priorities = [1.0];
-        queue_infos.push(
-            vk::DeviceQueueCreateInfo::default()
-                .flags(vk::DeviceQueueCreateFlags::INTERNALLY_SYNCHRONIZED_KHR)
-                .queue_family_index(decode_queue)
-                .queue_priorities(&decode_queue_priorities),
-        );
-
-        let enabled_extensions = DEVICE_EXTENSIONS.to_vec();
-        log::debug!("Creating vulkan device");
-        log::debug!("    with extensions:");
-        for ext in &enabled_extensions {
-            log::debug!("        {}", ext.to_string_lossy());
-        }
-
-        let enabled_extensions: Vec<_> = enabled_extensions.iter().map(|e| e.as_ptr()).collect();
-
-        let create_info = vk::DeviceCreateInfo::default()
-            .push(&mut features)
-            .push(&mut descriptor_heap)
-            .push(&mut shader_object)
-            .push(&mut vulkan_13)
-            .push(&mut vulkan_12)
-            .push(&mut vulkan_11)
-            .push(&mut video_maintenance1)
-            .push(&mut video_maintenance2)
-            .push(&mut swapchain_maintenance1)
-            .push(&mut internally_synchronized_queues)
-            .enabled_extension_names(&enabled_extensions)
-            .queue_create_infos(&queue_infos);
-
-        let device = unsafe {
-            self.instance
-                .create_device(physical_device, &create_info, None)
-        }
-        .context(VulkanSnafu)?;
-
-        Ok(Device {
-            device,
-            physical_device,
-
-            _instance: self.clone(),
-        })
-    }
 }
 
 impl Drop for Instance {
@@ -641,9 +411,6 @@ pub enum InstanceError {
     FromBytesUntilNull {
         source: std::ffi::FromBytesUntilNulError,
     },
-
-    #[snafu(display("Failed to get window handle"))]
-    WindowHandle,
 
     #[snafu(whatever)]
     Whatever { message: String },

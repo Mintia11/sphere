@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use etna::instance::InstanceCreateInfo;
+use etna::{
+    device::Device,
+    instance::{Instance, InstanceCreateInfo},
+    surface::Surface,
+};
 use log::LevelFilter;
 use sdl3::{event::Event, keyboard::Keycode};
 
@@ -9,7 +13,7 @@ fn main() {
         .filter_level(LevelFilter::Trace)
         .init();
 
-    let instance = etna::instance::Instance::new(InstanceCreateInfo { debug: true })
+    let instance = Instance::new(InstanceCreateInfo { debug: true })
         .expect("Failed to intiailize vulkan instance");
     let instance = Arc::new(instance);
 
@@ -23,15 +27,12 @@ fn main() {
         .build()
         .unwrap();
 
-    let surface = instance
-        .create_surface(&window)
-        .expect("Failed to create surface");
+    let surface = Surface::new(&instance, &window).expect("Failed to create a surface");
     let physical_device = instance
         .pick_physical_device(Some(&surface))
         .expect("Failed to pick physical device");
 
-    let device = instance
-        .create_device(physical_device, Some(&surface))
+    let device = Device::new(&instance, physical_device, Some(&surface))
         .expect("Failed to create logical device");
     let device = Arc::new(device);
 
