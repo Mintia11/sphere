@@ -138,9 +138,6 @@ void* etna_allocator_realloc(etna_allocator_t* alloc, void* data, const size_t n
     etna_alloc_bucket_header_t* bucket = ETNA_ALLOCATION_GET_BUCKET(data);
     size_t required_total = ETNA_ALIGN_UP(new_size + sizeof(etna_alloc_t), ETNA_MIN_ALIGN);
 
-    printf("reallocating to %lld (requested %lld) in bucket of size %lld\n", required_total,
-           new_size, bucket->size);
-
     if (required_total <= bucket->size) {
         return data;
     }
