@@ -1,6 +1,7 @@
 use std::{
     collections::BTreeMap,
     ffi::{CStr, c_void},
+    sync::Arc,
 };
 
 use ash::{
@@ -283,7 +284,10 @@ impl Instance {
     }
 
     #[profiling::function]
-    pub fn create_surface(&self, window: &impl HasWindowHandle) -> Result<Surface, InstanceError> {
+    pub fn create_surface(
+        self: &Arc<Self>,
+        window: &impl HasWindowHandle,
+    ) -> Result<Surface, InstanceError> {
         let handle = window
             .window_handle()
             .map_err(|_| InstanceError::WindowHandle)?;
@@ -302,7 +306,11 @@ impl Instance {
         };
         let ext = khr::surface::Instance::load(&self.entry, &self.instance);
 
-        Ok(Surface { handle, ext })
+        Ok(Surface {
+            handle,
+            ext,
+            _instance: self.clone(),
+        })
     }
 
     #[profiling::function]
@@ -428,7 +436,7 @@ impl Instance {
 
     #[profiling::function]
     pub fn create_device(
-        &self,
+        self: &Arc<Self>,
         physical_device: vk::PhysicalDevice,
         surface: Option<&Surface>,
     ) -> Result<Device, InstanceError> {
@@ -598,7 +606,12 @@ impl Instance {
         }
         .context(VulkanSnafu)?;
 
-        Ok(Device { device })
+        Ok(Device {
+            device,
+            physical_device,
+
+            _instance: self.clone(),
+        })
     }
 }
 

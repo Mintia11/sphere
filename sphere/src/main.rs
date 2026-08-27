@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use etna::instance::InstanceCreateInfo;
 use log::LevelFilter;
 use sdl3::{event::Event, keyboard::Keycode};
@@ -9,6 +11,7 @@ fn main() {
 
     let instance = etna::instance::Instance::new(InstanceCreateInfo { debug: true })
         .expect("Failed to intiailize vulkan instance");
+    let instance = Arc::new(instance);
 
     let sdl_context = sdl3::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -26,9 +29,11 @@ fn main() {
     let physical_device = instance
         .pick_physical_device(Some(&surface))
         .expect("Failed to pick physical device");
+
     let device = instance
         .create_device(physical_device, Some(&surface))
         .expect("Failed to create logical device");
+    let device = Arc::new(device);
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
