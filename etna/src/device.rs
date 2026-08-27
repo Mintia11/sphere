@@ -1,4 +1,4 @@
-use std::{ffi::CStr, sync::Arc};
+use std::ffi::CStr;
 
 use ash::{
     ext, khr,
@@ -6,13 +6,18 @@ use ash::{
 };
 use snafu::{ResultExt, Snafu};
 
-use crate::{instance::Instance, surface::Surface};
+use crate::{
+    cmd::{self, CommandPool},
+    destroy::{DestroyWithDevice, DestroyWithInstance},
+    instance::Instance,
+    surface::Surface,
+};
 
 pub struct Device {
     pub device: ash::Device,
     pub physical_device: vk::PhysicalDevice,
 
-    pub(crate) _instance: Arc<Instance>,
+    pub command_pools: Vec<CommandPool>,
 }
 
 pub(crate) const DEVICE_EXTENSIONS: &[&CStr] = &[
@@ -34,7 +39,7 @@ pub(crate) const DEVICE_EXTENSIONS: &[&CStr] = &[
 
 impl Device {
     pub fn new(
-        instance: &Arc<Instance>,
+        instance: &Instance,
         physical_device: vk::PhysicalDevice,
         surface: Option<&Surface>,
     ) -> Result<Self, DeviceError> {
@@ -210,20 +215,26 @@ impl Device {
         }
         .context(VulkanSnafu)?;
 
+        let graphics_command_pool =
+            CommandPool::new(&device, graphics_queue, 2).context(CommandSnafu)?;
+        let decode_command_pool =
+            CommandPool::new(&device, decode_queue, 1).context(CommandSnafu)?;
+
         Ok(Device {
             device,
             physical_device,
-
-            _instance: instance.clone(),
+            command_pools: vec![graphics_command_pool, decode_command_pool],
         })
     }
 }
 
-impl Drop for Device {
-    fn drop(&mut self) {
-        unsafe {
-            self.device.destroy_device(None);
+impl DestroyWithInstance for Device {
+    fn destroy(&mut self, _instance: &ash::Instance) {
+        for command_pool in &mut self.command_pools {
+            command_pool.destroy(&self.device);
         }
+
+        unsafe { self.device.destroy_device(None) };
     }
 }
 
@@ -236,6 +247,9 @@ pub enum DeviceError {
     FromBytesUntilNull {
         source: std::ffi::FromBytesUntilNulError,
     },
+
+    #[snafu(display("Command error"))]
+    Command { source: cmd::CommandError },
 
     #[snafu(whatever)]
     Whatever { message: String },

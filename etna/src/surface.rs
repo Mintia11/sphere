@@ -1,24 +1,17 @@
-use std::sync::Arc;
-
 use ash::{khr, vk};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use snafu::{ResultExt, Snafu};
 
-use crate::instance::Instance;
+use crate::{destroy::DestroyWithInstance, instance::Instance};
 
 pub struct Surface {
     pub handle: vk::SurfaceKHR,
     pub ext: khr::surface::Instance,
-
-    pub(crate) _instance: Arc<Instance>,
 }
 
 impl Surface {
     #[profiling::function]
-    pub fn new(
-        instance: &Arc<Instance>,
-        window: &impl HasWindowHandle,
-    ) -> Result<Self, SurfaceError> {
+    pub fn new(instance: &Instance, window: &impl HasWindowHandle) -> Result<Self, SurfaceError> {
         let handle = window
             .window_handle()
             .map_err(|_| SurfaceError::WindowHandle)?;
@@ -37,16 +30,12 @@ impl Surface {
         };
         let ext = khr::surface::Instance::load(&instance.entry, &instance.instance);
 
-        Ok(Surface {
-            handle,
-            ext,
-            _instance: instance.clone(),
-        })
+        Ok(Surface { handle, ext })
     }
 }
 
-impl Drop for Surface {
-    fn drop(&mut self) {
+impl DestroyWithInstance for Surface {
+    fn destroy(&mut self, _instance: &ash::Instance) {
         unsafe {
             self.ext.destroy_surface(self.handle, None);
         }
