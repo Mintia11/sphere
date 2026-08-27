@@ -17,7 +17,15 @@ pub struct Device {
     pub device: ash::Device,
     pub physical_device: vk::PhysicalDevice,
 
-    pub command_pools: Vec<CommandPool>,
+    pub graphics_pool: CommandPool,
+    pub decode_pool: CommandPool,
+
+    pub swapchain: khr::swapchain::Device,
+    pub swapchain_maintenance1: khr::swapchain_maintenance1::Device,
+    pub shader_object: ext::shader_object::Device,
+    pub descriptor_heap: ext::descriptor_heap::Device,
+    pub video_queue: khr::video_queue::Device,
+    pub video_decode_queue: khr::video_decode_queue::Device,
 }
 
 pub(crate) const DEVICE_EXTENSIONS: &[&CStr] = &[
@@ -221,18 +229,29 @@ impl Device {
             CommandPool::new(&device, decode_queue, 1).context(CommandSnafu)?;
 
         Ok(Device {
-            device,
             physical_device,
-            command_pools: vec![graphics_command_pool, decode_command_pool],
+            graphics_pool: graphics_command_pool,
+            decode_pool: decode_command_pool,
+
+            swapchain: khr::swapchain::Device::load(&instance.instance, &device),
+            swapchain_maintenance1: khr::swapchain_maintenance1::Device::load(
+                &instance.instance,
+                &device,
+            ),
+            shader_object: ext::shader_object::Device::load(&instance.instance, &device),
+            descriptor_heap: ext::descriptor_heap::Device::load(&instance.instance, &device),
+            video_queue: khr::video_queue::Device::load(&instance.instance, &device),
+            video_decode_queue: khr::video_decode_queue::Device::load(&instance.instance, &device),
+
+            device,
         })
     }
 }
 
 impl DestroyWithInstance for Device {
     fn destroy(&mut self, _instance: &ash::Instance) {
-        for command_pool in &mut self.command_pools {
-            command_pool.destroy(&self.device);
-        }
+        self.graphics_pool.destroy(&self.device);
+        self.decode_pool.destroy(&self.device);
 
         unsafe { self.device.destroy_device(None) };
     }
