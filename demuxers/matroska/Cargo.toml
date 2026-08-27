@@ -1,9 +1,0 @@
-[package]
-name = "matroska"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-bytes.workspace = true
-common = { path = "../../common" }
-thiserror.workspace = true
