@@ -128,8 +128,45 @@ void* etna_allocator_allocate(etna_allocator_t* alloc, const void* parent, size_
     return &our_allocation->data;
 }
 
+void* etna_allocator_realloc(etna_allocator_t* alloc, void* data, const size_t new_size) {
+    etna_alloc_t* allocation = ETNA_ALLOCATION_GET(data);
+    if (allocation->sentinel != ETNA_ALLOC_SENTINEL_VALUE) {
+        printf("fatal: tried to realloc a corrupt or freed allocation at %p\n", data);
+        exit(1);
+    }
+
+    etna_alloc_bucket_header_t* bucket = ETNA_ALLOCATION_GET_BUCKET(data);
+    size_t required_total = ETNA_ALIGN_UP(new_size + sizeof(etna_alloc_t), ETNA_MIN_ALIGN);
+
+    printf("reallocating to %lld (requested %lld) in bucket of size %lld\n", required_total,
+           new_size, bucket->size);
+
+    if (required_total <= bucket->size) {
+        return data;
+    }
+
+    if (atomic_load_explicit(&allocation->refcount, memory_order_seq_cst) != 1) {
+        printf("fatal: cannot grow-move allocation at %p with live children (refcount=%u)\n", data,
+               (unsigned)atomic_load_explicit(&allocation->refcount, memory_order_seq_cst));
+        exit(1);
+    }
+
+    size_t old_usable = bucket->size - sizeof(etna_alloc_t);
+    etna_alloc_t* parent_alloc = allocation->parent;
+
+    void* new_data =
+        etna_allocator_allocate(alloc, parent_alloc ? &parent_alloc->data : NULL, new_size);
+    memcpy(new_data, data, old_usable < new_size ? old_usable : new_size);
+
+    etna_allocator_free(alloc, data);
+
+    return new_data;
+}
+
 int etna_allocator_free(etna_allocator_t* alloc, void* data) {
     etna_alloc_t* allocation = ETNA_ALLOCATION_GET(data);
+
+    etna_mutex_lock(&alloc->mtx);
 
     if (atomic_load_explicit(&allocation->refcount, memory_order_seq_cst) != 1) {
         return atomic_load_explicit(&allocation->refcount, memory_order_seq_cst);
@@ -143,7 +180,6 @@ int etna_allocator_free(etna_allocator_t* alloc, void* data) {
         exit(1);
     }
 
-    etna_mutex_lock(&alloc->mtx);
     if (allocation->parent) {
         atomic_fetch_sub_explicit(&allocation->parent->refcount, 1, memory_order_release);
     }
@@ -151,7 +187,7 @@ int etna_allocator_free(etna_allocator_t* alloc, void* data) {
     allocation->sentinel = ETNA_FREE_SENTINEL_VALUE;
 
     etna_alloc_bucket_header_t* bucket = ETNA_ALLOCATION_GET_BUCKET(data);
-    while ((bucket->first_free != 0) && ((uintptr_t)bucket->first_free & ~0xFFFF) == 0)
+    while ((bucket->first_free != 0) && ((uintptr_t)bucket->first_free & 0xFFFF) == 0)
         bucket = bucket->parent;
 
     *(void**)allocation = bucket->first_free;
