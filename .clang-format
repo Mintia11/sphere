@@ -1,0 +1,62 @@
+# .clang-format
+Language: Cpp
+BasedOnStyle: Google
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+
+# Braces on the same line as the statement (K&R/Attach), not Allman
+BreakBeforeBraces: Attach
+
+# Pointers/references bind to the type: `int* foo`, not `int *foo` or `int * foo`
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false
+
+# Function signature/call formatting
+AlignAfterOpenBracket: Align
+AllowAllParametersOfDeclarationOnNextLine: true
+BinPackArguments: true
+BinPackParameters: true
+SpaceBeforeParens: ControlStatements   # `if (x)` but `foo(x)`, matches your call style
+SpacesInParentheses: false
+SpaceInEmptyParentheses: false
+
+# Short blocks stay compact rather than force-expanding
+AllowShortFunctionsOnASingleLine: InlineOnly
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+
+# Indentation details
+IndentCaseLabels: true
+NamespaceIndentation: None
+ContinuationIndentWidth: 4
+
+# Pointers in casts: `(etna_allocator_t*)malloc(...)`
+SpaceAfterCStyleCast: false
+
+# Keep struct/enum init lists tight
+Cpp11BracedListStyle: true
+SpaceBeforeCpp11BracedList: false
+
+# Includes: keep as-is, don't auto-sort/reorder aggressively across groups
+SortIncludes: Never
+
+# Comments
+ReflowComments: false
+
+# Alignment of consecutive declarations/assignments — off, matches your example
+# (allocator_size and allocator aren't column-aligned in your sample)
+AlignConsecutiveDeclarations: None
+AlignConsecutiveAssignments: None
+
+# Single-statement bodies not forced onto their own braces line
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+
+# Function pointer typedefs, common in a C-adjacent handle/vtable style
+PenaltyReturnTypeOnItsOwnLine: 1000
+AlwaysBreakAfterReturnType: None
