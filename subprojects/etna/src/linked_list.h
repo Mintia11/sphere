@@ -2,11 +2,9 @@
 
 #include <stddef.h>
 
-typedef struct etna_listnode etna_listnode_t;
-
 typedef struct etna_listnode {
-    etna_listnode_t* prev;
-    etna_listnode_t* next;
+    struct etna_listnode* prev;
+    struct etna_listnode* next;
 } etna_listnode_t;
 
 #ifndef container_of
@@ -15,30 +13,30 @@ typedef struct etna_listnode {
 #define etna_container_of container_of
 #endif
 
-#define ETNA_LISTNODE_INIT         \
-    (etna_listnode_t) {            \
-        .prev = NULL, .next = NULL \
-    }
-
-static inline void __list_add(etna_listnode_t* new_node, etna_listnode_t* prev,
-                              etna_listnode_t* next) {
-    next->prev = new_node;
-    new_node->next = next;
-    new_node->prev = prev;
-    prev->next = new_node;
+static inline void etna_list_init(etna_listnode_t* head) {
+    head->next = head;
+    head->prev = head;
 }
 
-static inline void etna_list_add_tail(etna_listnode_t* head, etna_listnode_t* new_node) {
-    __list_add(new_node, head->prev, head);
+static inline void etna_list_add(etna_listnode_t* head, etna_listnode_t* entry) {
+    entry->next = head->next;
+    entry->prev = head;
+    head->next->prev = entry;
+    head->next = entry;
 }
 
 static inline void etna_list_del(etna_listnode_t* node) {
-    node->next->prev = node->prev;
-    node->prev->next = node->next;
-    node->next = NULL;
-    node->prev = NULL;
+    etna_listnode_t* next = node->next;
+    etna_listnode_t* prev = node->prev;
+
+    prev->next = next;
+    next->prev = prev;
 }
 
-#define ETNA_LIST_FOR_EACH_ENTRY(pos, head, member)                                      \
-    for (pos = container_of((head)->next, typeof(*pos), member); &pos->member != (head); \
-         pos = container_of(pos->member.next, typeof(*pos), member))
+#define ETNA_LIST_FOR_EACH_ENTRY(pos, head, member)                                               \
+    for (pos = ((head) && (head)->next)                                                           \
+                   ? etna_container_of((head)->next, __typeof__(*pos), member)                    \
+                   : NULL;                                                                        \
+         pos && &pos->member != (head);                                                           \
+         pos = (pos->member.next) ? etna_container_of(pos->member.next, __typeof__(*pos), member) \
+                                  : NULL)
