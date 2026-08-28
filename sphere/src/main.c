@@ -1,32 +1,44 @@
 #include <stdint.h>
 #include <mutex.h>
 #include <alloc.h>
-#include <Volk/volk.h>
-#include "log.h"
-#include "vec.h"
+#include <log.h>
+#include <vulkan/instance.h>
+#include <SDL3/SDL.h>
+#include <Windows.h>
+#include <vulkan/surface.h>
 
 int main() {
     etna_allocator_init_global();
     etna_logger_init_global();
 
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Window* window =
+        SDL_CreateWindow("Sphere", 1366, 768, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+
     etna_log_scope_t* main_log = etna_log_scope_new("main", NULL);
 
     ETNA_INFO(main_log, "Hello world!\n");
-    void* mem = ETNA_ALLOC_TYPE(NULL, int);
-    ETNA_FREE(mem);
+    etna_vk_instance* inst = etna_vk_create_instance(true);
 
-    ETNA_VEC(uint32_t) ciao = ETNA_VEC_INIT;
-    ETNA_VEC_PUSH(&ciao, 1);
-    ETNA_VEC_PUSH(&ciao, 2);
-    ETNA_VEC_PUSH(&ciao, 3);
-    ETNA_VEC_PUSH(&ciao, 4);
-    ETNA_VEC_PUSH(&ciao, 5);
+    SDL_PropertiesID props = SDL_GetWindowProperties(window);
+    HWND hwnd = (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
+    HINSTANCE hinstance =
+        (HINSTANCE)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_INSTANCE_POINTER, NULL);
 
-    etna_log_scope_t* loop_log = etna_log_scope_new("loop", main_log);
+    etna_vk_surface* surf = etna_vk_create_surface(
+        &(etna_vk_surface_create_info){.hwnd = hwnd, .inst = inst, .hinstance = hinstance});
 
-    ETNA_VEC_FOR_EACH_ENTRY(&ciao, idx) {
-        ETNA_INFO(loop_log, "%d\n", ETNA_VEC_AT(&ciao, idx));
+    bool is_running = true;
+    SDL_Event event = {0};
+    while (is_running) {
+        while (SDL_PollEvent(&event)) {
+            switch (event.type) {
+                case SDL_EVENT_QUIT:
+                    is_running = false;
+                    break;
+                default:
+                    break;
+            }
+        }
     }
-
-    ETNA_FREE(main);
 }

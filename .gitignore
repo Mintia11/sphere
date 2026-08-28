@@ -4,3 +4,6 @@
 *.webm
 
 subprojects/volk
+subprojects/SDL3-*
+subprojects/.wraplock
+subprojects/packagecache
