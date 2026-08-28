@@ -82,7 +82,7 @@ void* etna_allocator_allocate(etna_allocator_t* alloc, const void* parent, size_
     etna_alloc_t* parent_alloc = NULL;
     if (parent) {
         parent_alloc = ETNA_ALLOCATION_GET(parent);
-        if (parent_alloc->sentinel != ETNA_ALLOC_SENTINEL_VALUE) {
+        if (memcmp(parent_alloc->sentinel, ETNA_ALLOC_SENTINEL_VALUE, 3) != 0) {
             ETNA_FATAL(
                 alloc->scope,
                 "fatal: tried to link an allocation of size %lld to a corrupt allocation at %p",
@@ -104,8 +104,14 @@ void* etna_allocator_allocate(etna_allocator_t* alloc, const void* parent, size_
     }
 
     if (bucket_idx == -1) {
-        printf("todo: implement large allocations\n");
-        exit(1);
+        etna_alloc_t* allocation = malloc(size);
+        allocation->is_large = true;
+        allocation->parent = parent_alloc;
+        allocation->refcount = 1;
+        memcpy(allocation->sentinel, ETNA_ALLOC_SENTINEL_VALUE, 3);
+
+        etna_mutex_unlock(&alloc->mtx);
+        return &allocation->data;
     }
 
     if (!alloc->buckets[bucket_idx]) {
@@ -121,7 +127,7 @@ void* etna_allocator_allocate(etna_allocator_t* alloc, const void* parent, size_
 
     our_allocation->parent = parent_alloc;
     our_allocation->refcount = 1;
-    our_allocation->sentinel = ETNA_ALLOC_SENTINEL_VALUE;
+    memcpy(our_allocation->sentinel, ETNA_ALLOC_SENTINEL_VALUE, 3);
 
     if (parent_alloc) {
         atomic_fetch_add_explicit(&parent_alloc->refcount, 1, memory_order_acquire);
@@ -134,10 +140,35 @@ void* etna_allocator_allocate(etna_allocator_t* alloc, const void* parent, size_
 
 void* etna_allocator_realloc(etna_allocator_t* alloc, void* data, const size_t new_size) {
     etna_alloc_t* allocation = ETNA_ALLOCATION_GET(data);
-    if (allocation->sentinel != ETNA_ALLOC_SENTINEL_VALUE) {
+    if (memcmp(allocation->sentinel, ETNA_ALLOC_SENTINEL_VALUE, 3) != 0) {
         ETNA_FATAL(alloc->scope, "fatal: tried to realloc a corrupt or freed allocation at %p\n",
                    data);
         exit(1);
+    }
+
+    if (allocation->is_large) {
+        if (atomic_load_explicit(&allocation->refcount, memory_order_seq_cst) != 1) {
+            ETNA_FATAL(
+                alloc->scope,
+                "fatal: cannot grow-move allocation at %p with live children (refcount=%u)\n", data,
+                (unsigned)atomic_load_explicit(&allocation->refcount, memory_order_seq_cst));
+            exit(1);
+        }
+
+        size_t required_total = ETNA_ALIGN_UP(new_size + sizeof(etna_alloc_t), ETNA_MIN_ALIGN);
+
+        etna_mutex_lock(&alloc->mtx);
+        etna_alloc_t* new_allocation = realloc(allocation, required_total);
+        if (!new_allocation) {
+            etna_mutex_unlock(&alloc->mtx);
+            ETNA_FATAL(alloc->scope,
+                       "fatal: out of memory reallocating large allocation at %p to %zu bytes\n",
+                       data, new_size);
+            exit(1);
+        }
+        etna_mutex_unlock(&alloc->mtx);
+
+        return &new_allocation->data;
     }
 
     etna_alloc_bucket_header_t* bucket = ETNA_ALLOCATION_GET_BUCKET(data);
@@ -170,10 +201,10 @@ void* etna_allocator_realloc(etna_allocator_t* alloc, void* data, const size_t n
 int etna_allocator_free(etna_allocator_t* alloc, void* data) {
     etna_alloc_t* allocation = ETNA_ALLOCATION_GET(data);
 
-    if (allocation->sentinel == ETNA_FREE_SENTINEL_VALUE) {
+    if (memcmp(allocation->sentinel, ETNA_FREE_SENTINEL_VALUE, 3) == 0) {
         ETNA_FATAL(alloc->scope, "fatal: tried to free allocation at %p twice", data);
         exit(1);
-    } else if (allocation->sentinel != ETNA_ALLOC_SENTINEL_VALUE) {
+    } else if (memcmp(allocation->sentinel, ETNA_ALLOC_SENTINEL_VALUE, 3) != 0) {
         ETNA_FATAL(alloc->scope,
                    "fatal: tried to free an allocation at %p not tracked by this allocator", data);
         exit(1);
@@ -190,7 +221,14 @@ int etna_allocator_free(etna_allocator_t* alloc, void* data) {
         atomic_fetch_sub_explicit(&allocation->parent->refcount, 1, memory_order_release);
     }
 
-    allocation->sentinel = ETNA_FREE_SENTINEL_VALUE;
+    if (allocation->is_large) {
+        free(allocation);
+
+        etna_mutex_unlock(&alloc->mtx);
+        return 0;
+    }
+
+    memcpy(allocation->sentinel, ETNA_FREE_SENTINEL_VALUE, 3);
 
     etna_alloc_bucket_header_t* bucket = ETNA_ALLOCATION_GET_BUCKET(data);
     while ((bucket->first_free != 0) && ((uintptr_t)bucket->first_free & 0xFFFF) == 0)

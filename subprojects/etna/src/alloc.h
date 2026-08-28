@@ -3,6 +3,7 @@
 #include <mutex.h>
 #include <linked_list.h>
 #include <stdatomic.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include "log.h"
@@ -14,7 +15,8 @@ extern struct etna_allocator* etna_global_alloc;
 typedef struct etna_alloc {
     struct etna_alloc* parent;
     atomic_uint_fast32_t refcount;
-    uint32_t sentinel;
+    char sentinel[3];
+    bool is_large;
     uint8_t data[];
 } etna_alloc_t;
 
@@ -36,8 +38,8 @@ typedef struct etna_allocator {
 } etna_allocator_t;
 
 #define ETNA_MIN_ALIGN 16
-#define ETNA_ALLOC_SENTINEL_VALUE (*(uint32_t*)"etna")
-#define ETNA_FREE_SENTINEL_VALUE (*(uint32_t*)"free")
+#define ETNA_ALLOC_SENTINEL_VALUE "etn"
+#define ETNA_FREE_SENTINEL_VALUE "fre"
 
 #define ETNA_ALIGN_UP(value, align) (((value) + (align) - 1) & ~((align) - 1))
 #define ETNA_ALLOCATION_GET(data) (etna_alloc_t*)(data - (void*)ETNA_MIN_ALIGN)
@@ -46,6 +48,8 @@ typedef struct etna_allocator {
 #define ETNA_ALLOC(parent, size) etna_allocator_allocate(etna_global_alloc, parent, size)
 #define ETNA_ALLOC_TYPE(parent, type) \
     etna_allocator_allocate(etna_global_alloc, parent, sizeof(type))
+#define ETNA_CALLOC_TYPE(parent, type, count) \
+    etna_allocator_allocate(etna_global_alloc, parent, sizeof(type) * (count))
 #define ETNA_REALLOC(data, new_size) etna_allocator_realloc(etna_global_alloc, data, new_size)
 #define ETNA_FREE(data) etna_allocator_free(etna_global_alloc, data)
 
