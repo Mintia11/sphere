@@ -47,7 +47,7 @@ void etna_logger_init_global();
 void etna_logger_init(etna_logger_t* logger, etna_log_subscriber_t** subscribers,
                       size_t subscriber_count);
 void etna_log_message(etna_logger_t* logger, etna_log_scope_t* scope, etna_log_severity_t severity,
-                      const char* msg, ...);
+                      const char* msg, ...) __attribute__((format(printf, 4, 5)));
 etna_log_scope_t* etna_log_scope_new(const char* name, etna_log_scope_t* parent);
 
 etna_log_subscriber_t* etna_log_stdio(etna_logger_t* logger);
