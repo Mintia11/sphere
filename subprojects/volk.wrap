@@ -3,6 +3,3 @@ url = https://github.com/zeux/volk.git
 revision = vulkan-sdk-1.4.357
 depth = 1
 method = cmake
-
-[provide]
-volk = volk_dep

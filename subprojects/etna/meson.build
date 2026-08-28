@@ -7,7 +7,18 @@ project(
 
 cc = meson.get_compiler('c')
 vulkan_dep = dependency('vulkan')
-volk_dep = dependency('volk')
+
+cmake = import('cmake')
+
+volk_options = cmake.subproject_options()
+volk_options.add_cmake_defines(
+    {
+        'VOLK_STATIC_DEFINES': 'VK_USE_PLATFORM_WIN32_KHR',
+    },
+)
+
+volk_proj = cmake.subproject('volk', options: volk_options)
+volk_dep = volk_proj.dependency('volk')
 
 if get_option('buildtype') == 'debug'
     if cc.get_id() in ['clang', 'gcc']
@@ -18,7 +29,7 @@ if get_option('buildtype') == 'debug'
     endif
 endif
 
-etna_sources = files('src/alloc.c')
+etna_sources = files('src/alloc.c', 'src/log.c', 'src/vulkan/instance.c')
 
 etna_inc = include_directories('src')
 
