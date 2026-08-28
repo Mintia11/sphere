@@ -52,17 +52,16 @@ static VkBool32 VKAPI_PTR etna_vk_debug_utils_callback(
 
 etna_vk_instance* etna_vk_create_instance(bool debug) {
     etna_vk_instance* inst = ETNA_ALLOC_TYPE(NULL, etna_vk_instance);
-    etna_log_scope_t* vk_scope = etna_log_scope_new("vk", NULL);
-    inst->vk_scope = vk_scope;
+    etna_log_scope_t* log = etna_log_scope_new("vk", NULL);
+    inst->log_scope = log;
 
     volkInitialize();
 
     uint32_t api_version = VK_API_VERSION_1_0;
-    VK_CHECK(vk_scope, vkEnumerateInstanceVersion(&api_version));
+    VK_CHECK(log, vkEnumerateInstanceVersion(&api_version));
 
-    ETNA_DEBUG(vk_scope, "available instance version: %d.%d.%d\n",
-               VK_API_VERSION_MAJOR(api_version), VK_API_VERSION_MINOR(api_version),
-               VK_API_VERSION_PATCH(api_version));
+    ETNA_DEBUG(log, "available instance version: %d.%d.%d\n", VK_API_VERSION_MAJOR(api_version),
+               VK_API_VERSION_MINOR(api_version), VK_API_VERSION_PATCH(api_version));
 
     VkInstanceCreateInfo info = {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -74,13 +73,13 @@ etna_vk_instance* etna_vk_create_instance(bool debug) {
     };
 
     uint32_t layer_count = 0;
-    VK_CHECK(vk_scope, vkEnumerateInstanceLayerProperties(&layer_count, NULL));
+    VK_CHECK(log, vkEnumerateInstanceLayerProperties(&layer_count, NULL));
     VkLayerProperties* layers = ETNA_CALLOC_TYPE(inst, VkLayerProperties, layer_count);
-    VK_CHECK(vk_scope, vkEnumerateInstanceLayerProperties(&layer_count, layers));
+    VK_CHECK(log, vkEnumerateInstanceLayerProperties(&layer_count, layers));
 
-    ETNA_DEBUG(vk_scope, "available instance layers:\n");
+    ETNA_DEBUG(log, "available instance layers:\n");
     for (uint32_t i = 0; i < layer_count; i++) {
-        ETNA_DEBUG(vk_scope, "    %s (v%d.%d.%d)\n", layers[i].layerName,
+        ETNA_DEBUG(log, "    %s (v%d.%d.%d)\n", layers[i].layerName,
                    VK_API_VERSION_MAJOR(api_version), VK_API_VERSION_MINOR(api_version),
                    VK_API_VERSION_PATCH(api_version));
     }
@@ -100,15 +99,15 @@ etna_vk_instance* etna_vk_create_instance(bool debug) {
         }
 
         if (!debug_layers_enabled) {
-            ETNA_WARN(vk_scope, "api validation layers requested, but couldn't be found");
+            ETNA_WARN(log, "api validation layers requested, but couldn't be found");
         }
     }
 
     uint32_t global_ext_count = 0;
-    VK_CHECK(vk_scope, vkEnumerateInstanceExtensionProperties(NULL, &global_ext_count, NULL));
+    VK_CHECK(log, vkEnumerateInstanceExtensionProperties(NULL, &global_ext_count, NULL));
     VkExtensionProperties* global_ext =
         ETNA_CALLOC_TYPE(inst, VkExtensionProperties, global_ext_count);
-    VK_CHECK(vk_scope, vkEnumerateInstanceExtensionProperties(NULL, &global_ext_count, global_ext));
+    VK_CHECK(log, vkEnumerateInstanceExtensionProperties(NULL, &global_ext_count, global_ext));
 
     typedef struct {
         VkExtensionProperties* exts;
@@ -119,12 +118,12 @@ etna_vk_instance* etna_vk_create_instance(bool debug) {
 
     for (uint32_t i = 0; i < layer_count; i++) {
         uint32_t layer_ext_count = 0;
-        VK_CHECK(vk_scope, vkEnumerateInstanceExtensionProperties(layers[i].layerName,
-                                                                  &layer_ext_count, NULL));
+        VK_CHECK(log, vkEnumerateInstanceExtensionProperties(layers[i].layerName, &layer_ext_count,
+                                                             NULL));
         VkExtensionProperties* exts =
             ETNA_CALLOC_TYPE(inst, VkExtensionProperties, layer_ext_count);
-        VK_CHECK(vk_scope, vkEnumerateInstanceExtensionProperties(layers[i].layerName,
-                                                                  &layer_ext_count, exts));
+        VK_CHECK(log, vkEnumerateInstanceExtensionProperties(layers[i].layerName, &layer_ext_count,
+                                                             exts));
 
         layer_ext_prop_t prop = {
             .exts = exts, .extension_count = layer_ext_count, .layer_name = layers[i].layerName};
@@ -143,15 +142,15 @@ etna_vk_instance* etna_vk_create_instance(bool debug) {
         }
     }
 
-    ETNA_DEBUG(vk_scope, "available instance extensions:\n");
+    ETNA_DEBUG(log, "available instance extensions:\n");
     for (uint32_t i = 0; i < global_ext_count; i++) {
-        ETNA_DEBUG(vk_scope, "    %s\n", global_ext[i].extensionName);
+        ETNA_DEBUG(log, "    %s\n", global_ext[i].extensionName);
     }
     ETNA_VEC_FOR_EACH_ENTRY(&layer_ext, idx) {
         for (uint32_t i = 0; i < ETNA_VEC_AT(&layer_ext, idx).extension_count; i++) {
             const char* ext_name = ETNA_VEC_AT(&layer_ext, idx).exts[i].extensionName;
             if (ext_name[0] != 0) {
-                ETNA_DEBUG(vk_scope, "    %s (via %s)\n", ext_name,
+                ETNA_DEBUG(log, "    %s (via %s)\n", ext_name,
                            ETNA_VEC_AT(&layer_ext, idx).layer_name);
             }
         }
@@ -169,7 +168,7 @@ etna_vk_instance* etna_vk_create_instance(bool debug) {
         }
     }
 
-    etna_log_scope_t* validation = etna_log_scope_new("validation", vk_scope);
+    etna_log_scope_t* validation = etna_log_scope_new("validation", log);
 
     const VkDebugUtilsMessengerCreateInfoEXT debug_info = {
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
@@ -197,7 +196,7 @@ etna_vk_instance* etna_vk_create_instance(bool debug) {
         }
 
         if (!found) {
-            ETNA_WARN(vk_scope, "debug utils extensions were requested but couldn't be found");
+            ETNA_WARN(log, "debug utils extensions were requested but couldn't be found");
         }
     }
 
@@ -238,19 +237,19 @@ etna_vk_instance* etna_vk_create_instance(bool debug) {
 
     layer_settings_found:
         if (!found) {
-            ETNA_WARN(vk_scope, "couldn't enable extra validation settings");
+            ETNA_WARN(log, "couldn't enable extra validation settings");
         }
     }
 
-    ETNA_DEBUG(vk_scope, "creating instance with:\n");
-    ETNA_DEBUG(vk_scope, "enabled instance layers:\n");
+    ETNA_DEBUG(log, "creating instance with:\n");
+    ETNA_DEBUG(log, "enabled instance layers:\n");
     ETNA_VEC_FOR_EACH_ENTRY(&used_layers, idx) {
-        ETNA_DEBUG(vk_scope, "    %s\n", ETNA_VEC_AT(&used_layers, idx));
+        ETNA_DEBUG(log, "    %s\n", ETNA_VEC_AT(&used_layers, idx));
     }
 
-    ETNA_DEBUG(vk_scope, "enabled instance extensions:\n");
+    ETNA_DEBUG(log, "enabled instance extensions:\n");
     ETNA_VEC_FOR_EACH_ENTRY(&used_exts, idx) {
-        ETNA_DEBUG(vk_scope, "    %s\n", ETNA_VEC_AT(&used_exts, idx));
+        ETNA_DEBUG(log, "    %s\n", ETNA_VEC_AT(&used_exts, idx));
     }
 
     info.enabledLayerCount = used_layers.length;
@@ -259,8 +258,9 @@ etna_vk_instance* etna_vk_create_instance(bool debug) {
     info.ppEnabledExtensionNames = used_exts.data;
 
     VkInstance instance = NULL;
-    VK_CHECK(vk_scope, vkCreateInstance(&info, NULL, &instance));
+    VK_CHECK(log, vkCreateInstance(&info, NULL, &instance));
     volkLoadInstance(instance);
+    inst->instance = instance;
 
     if (debug) {
         VkDebugUtilsMessengerEXT debug_utils_messenger;

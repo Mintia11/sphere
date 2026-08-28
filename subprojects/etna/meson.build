@@ -29,7 +29,12 @@ if get_option('buildtype') == 'debug'
     endif
 endif
 
-etna_sources = files('src/alloc.c', 'src/log.c', 'src/vulkan/instance.c')
+etna_sources = files(
+    'src/alloc.c',
+    'src/log.c',
+    'src/vulkan/instance.c',
+    'src/vulkan/surface.c',
+)
 
 etna_inc = include_directories('src')
 

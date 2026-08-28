@@ -82,9 +82,9 @@ etna_log_scope_t* etna_log_scope_new(const char* name, etna_log_scope_t* parent)
     etna_log_scope_t* scope = ETNA_ALLOC_TYPE(parent, etna_log_scope_t);
     scope->parent = parent;
 
-    size_t name_len = strlen(name);
-    char* name_buf = ETNA_ALLOC(scope, strlen(name) + 1);
-    strncpy_s(name_buf, name_len + 1, name, name_len + 1);
+    size_t name_len = strlen(name) + 1;
+    char* name_buf = ETNA_ALLOC(scope, name_len);
+    strncpy_s(name_buf, name_len, name, name_len);
     scope->name = name_buf;
 
     return scope;

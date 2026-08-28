@@ -5,7 +5,7 @@
 #include "log.h"
 
 typedef struct {
-    etna_log_scope_t* vk_scope;
+    etna_log_scope_t* log_scope;
     VkInstance instance;
 } etna_vk_instance;
 
