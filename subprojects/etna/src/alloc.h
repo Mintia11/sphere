@@ -5,6 +5,7 @@
 #include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "log.h"
 
 struct etna_allocator;
 
@@ -28,6 +29,7 @@ typedef struct etna_alloc_bucket_header {
 
 typedef struct etna_allocator {
     etna_mutex_t mtx;
+    etna_log_scope_t* scope;
     size_t bucket_count;
     size_t* bucket_sizes;
     etna_alloc_bucket_header_t* buckets[];

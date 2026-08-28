@@ -10,13 +10,14 @@
 #include <string.h>
 
 const size_t etna_default_bucket_sizes[] = {32, 64, 128, 256, 512, 1024, 2048};
-struct etna_allocator* etna_global_alloc = 0;
+struct etna_allocator* etna_global_alloc = NULL;
 
 void etna_allocator_init_global() {
     etna_allocator_t* alloc =
         etna_allocator_new(etna_default_bucket_sizes, sizeof(etna_default_bucket_sizes) /
                                                           sizeof(etna_default_bucket_sizes[0]));
     etna_global_alloc = alloc;
+    alloc->scope = etna_log_scope_new("alloc", NULL);
 }
 
 etna_allocator_t* etna_allocator_new(const size_t* bucket_sizes, const size_t bucket_count) {
@@ -44,8 +45,9 @@ static void init_bucket(etna_allocator_t* alloc, const size_t bucket_idx, const 
                         etna_alloc_bucket_header_t* link_into) {
     void* mem = VirtualAlloc(NULL, 64 * 1024, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (!mem) {
-        printf("fatal: failed to allocate memory for bucket id: %lld of size %lld\n", bucket_idx,
-               size);
+        ETNA_FATAL(alloc->scope,
+                   "fatal: failed to allocate memory for bucket id: %lld of size %lld\n",
+                   bucket_idx, size);
         exit(1);
     }
 
@@ -81,8 +83,10 @@ void* etna_allocator_allocate(etna_allocator_t* alloc, const void* parent, size_
     if (parent) {
         parent_alloc = ETNA_ALLOCATION_GET(parent);
         if (parent_alloc->sentinel != ETNA_ALLOC_SENTINEL_VALUE) {
-            printf("fatal: tried to link an allocation of size %lld to a corrupt allocation at %p",
-                   size, parent);
+            ETNA_FATAL(
+                alloc->scope,
+                "fatal: tried to link an allocation of size %lld to a corrupt allocation at %p",
+                size, parent);
             exit(1);
         }
     }
@@ -131,7 +135,8 @@ void* etna_allocator_allocate(etna_allocator_t* alloc, const void* parent, size_
 void* etna_allocator_realloc(etna_allocator_t* alloc, void* data, const size_t new_size) {
     etna_alloc_t* allocation = ETNA_ALLOCATION_GET(data);
     if (allocation->sentinel != ETNA_ALLOC_SENTINEL_VALUE) {
-        printf("fatal: tried to realloc a corrupt or freed allocation at %p\n", data);
+        ETNA_FATAL(alloc->scope, "fatal: tried to realloc a corrupt or freed allocation at %p\n",
+                   data);
         exit(1);
     }
 
@@ -143,8 +148,10 @@ void* etna_allocator_realloc(etna_allocator_t* alloc, void* data, const size_t n
     }
 
     if (atomic_load_explicit(&allocation->refcount, memory_order_seq_cst) != 1) {
-        printf("fatal: cannot grow-move allocation at %p with live children (refcount=%u)\n", data,
-               (unsigned)atomic_load_explicit(&allocation->refcount, memory_order_seq_cst));
+        ETNA_FATAL(alloc->scope,
+                   "fatal: cannot grow-move allocation at %p with live children (refcount=%u)\n",
+                   data,
+                   (unsigned)atomic_load_explicit(&allocation->refcount, memory_order_seq_cst));
         exit(1);
     }
 
@@ -163,18 +170,20 @@ void* etna_allocator_realloc(etna_allocator_t* alloc, void* data, const size_t n
 int etna_allocator_free(etna_allocator_t* alloc, void* data) {
     etna_alloc_t* allocation = ETNA_ALLOCATION_GET(data);
 
+    if (allocation->sentinel == ETNA_FREE_SENTINEL_VALUE) {
+        ETNA_FATAL(alloc->scope, "fatal: tried to free allocation at %p twice", data);
+        exit(1);
+    } else if (allocation->sentinel != ETNA_ALLOC_SENTINEL_VALUE) {
+        ETNA_FATAL(alloc->scope,
+                   "fatal: tried to free an allocation at %p not tracked by this allocator", data);
+        exit(1);
+    }
+
     etna_mutex_lock(&alloc->mtx);
 
     if (atomic_load_explicit(&allocation->refcount, memory_order_seq_cst) != 1) {
+        etna_mutex_unlock(&alloc->mtx);
         return atomic_load_explicit(&allocation->refcount, memory_order_seq_cst);
-    }
-
-    if (allocation->sentinel == ETNA_FREE_SENTINEL_VALUE) {
-        printf("fatal: tried to free allocation at %p twice", data);
-        exit(1);
-    } else if (allocation->sentinel != ETNA_ALLOC_SENTINEL_VALUE) {
-        printf("fatal: tried to free an allocation at %p not tracked by this allocator", data);
-        exit(1);
     }
 
     if (allocation->parent) {
