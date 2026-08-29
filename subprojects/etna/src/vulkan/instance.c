@@ -49,12 +49,12 @@ static VkBool32 VKAPI_PTR etna_vk_debug_utils_callback(
     return false;
 }
 
-etna_vk_instance* etna_vk_create_instance(bool debug) {
-    etna_vk_instance* inst = ETNA_ALLOC_TYPE(NULL, etna_vk_instance);
+etna_vk_instance_t* etna_vk_create_instance(bool debug) {
+    etna_vk_instance_t* inst = ETNA_ALLOC_TYPE(NULL, etna_vk_instance_t);
     etna_log_scope_t* log = etna_log_scope_new("vk", NULL);
     inst->log_scope = log;
 
-    volkInitialize();
+    VK_CHECK(log, volkInitialize());
 
     uint32_t api_version = VK_API_VERSION_1_0;
     VK_CHECK(log, vkEnumerateInstanceVersion(&api_version));
@@ -168,6 +168,7 @@ etna_vk_instance* etna_vk_create_instance(bool debug) {
     }
 
     etna_log_scope_t* validation = etna_log_scope_new("validation", log);
+    inst->validation_scope = validation;
 
     const VkDebugUtilsMessengerCreateInfoEXT debug_info = {
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
@@ -263,9 +264,10 @@ etna_vk_instance* etna_vk_create_instance(bool debug) {
     inst->instance = instance;
 
     if (debug) {
-        VkDebugUtilsMessengerEXT debug_utils_messenger;
-        vkCreateDebugUtilsMessengerEXT(instance, &debug_info, VK_ALLOC(instance),
-                                       &debug_utils_messenger);
+        VkDebugUtilsMessengerEXT debug_messenger;
+        VK_CHECK(log, vkCreateDebugUtilsMessengerEXT(instance, &debug_info, VK_ALLOC(inst),
+                                                     &debug_messenger));
+        inst->debug_messenger = debug_messenger;
     }
 
     ETNA_VEC_FREE(&used_exts);
@@ -277,4 +279,14 @@ etna_vk_instance* etna_vk_create_instance(bool debug) {
     ETNA_FREE(layers);
 
     return inst;
+}
+
+void etna_vk_destroy_instance(etna_vk_instance_t* inst) {
+    if (inst->debug_messenger) {
+        vkDestroyDebugUtilsMessengerEXT(inst->instance, inst->debug_messenger, VK_ALLOC(inst));
+    }
+    ETNA_FREE(inst->validation_scope);
+    vkDestroyInstance(inst->instance, VK_ALLOC(inst));
+    ETNA_FREE(inst->log_scope);
+    ETNA_FREE(inst);
 }

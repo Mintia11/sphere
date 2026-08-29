@@ -18,15 +18,15 @@ int main() {
     etna_log_scope_t* main_log = etna_log_scope_new("main", NULL);
 
     ETNA_INFO(main_log, "Hello world!\n");
-    etna_vk_instance* inst = etna_vk_create_instance(true);
+    etna_vk_instance_t* inst = etna_vk_create_instance(true);
 
     SDL_PropertiesID props = SDL_GetWindowProperties(window);
     HWND hwnd = (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
     HINSTANCE hinstance =
         (HINSTANCE)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_INSTANCE_POINTER, NULL);
 
-    etna_vk_surface* surf = etna_vk_create_surface(
-        &(etna_vk_surface_create_info){.hwnd = hwnd, .inst = inst, .hinstance = hinstance});
+    etna_vk_surface_t* surf = etna_vk_create_surface(
+        &(etna_vk_surface_create_info_t){.hwnd = hwnd, .inst = inst, .hinstance = hinstance});
 
     bool is_running = true;
     SDL_Event event = {0};
@@ -41,4 +41,7 @@ int main() {
             }
         }
     }
+
+    etna_vk_destroy_surface(surf);
+    etna_vk_destroy_instance(inst);
 }
