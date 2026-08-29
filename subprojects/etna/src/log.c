@@ -57,7 +57,7 @@ static void print_scope_chain(etna_log_scope_t* scope) {
 void stdio_write(etna_log_scope_t* scope, etna_log_severity_t severity, const char* str) {
     const char* severity_to_str[] = {
         [ETNA_LOG_TRACE] = "trace", [ETNA_LOG_DEBUG] = "debug", [ETNA_LOG_INFO] = "info",
-        [ETNA_LOG_WARN] = "warn ",  [ETNA_LOG_ERROR] = "error", [ETNA_LOG_FATAL] = "fatal",
+        [ETNA_LOG_WARN] = "warn",   [ETNA_LOG_ERROR] = "error", [ETNA_LOG_FATAL] = "fatal",
     };
 
     const char* severity_to_color[] = {
