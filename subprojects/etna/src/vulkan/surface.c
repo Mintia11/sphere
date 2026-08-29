@@ -15,7 +15,7 @@ etna_vk_surface* etna_vk_create_surface(etna_vk_surface_create_info* info) {
         .hwnd = info->hwnd};
 
     VkSurfaceKHR surf = NULL;
-    VK_CHECK(log, vkCreateWin32SurfaceKHR(inst->instance, &create_info, NULL, &surf));
+    VK_CHECK(log, vkCreateWin32SurfaceKHR(inst->instance, &create_info, VK_ALLOC(surface), &surf));
     surface->surface = surf;
 
     return surface;

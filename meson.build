@@ -7,5 +7,6 @@ project(
 
 etna_proj = subproject('etna')
 etna_dep = etna_proj.get_variable('etna_dep')
+volk_includes_dep = etna_proj.get_variable('volk_includes_dep')
 
 subdir('sphere')

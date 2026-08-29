@@ -11,7 +11,6 @@ const char* vk_instance_exts[] = {
     VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME,
     VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME,
     VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME,
-    VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME,
     VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
 };
 
@@ -209,6 +208,7 @@ etna_vk_instance* etna_vk_create_instance(bool debug) {
 
     const VkLayerSettingEXT debug_settings[] = {
         ENABLE_BOOL("validate_best_practices"),
+        ENABLE_BOOL("legacy_detection"),
         ENABLE_BOOL("validate_sync"),
         ENABLE_BOOL("syncval_shader_accesses_heuristic"),
         ENABLE_BOOL("syncval_submit_time_validation"),
@@ -258,13 +258,14 @@ etna_vk_instance* etna_vk_create_instance(bool debug) {
     info.ppEnabledExtensionNames = used_exts.data;
 
     VkInstance instance = NULL;
-    VK_CHECK(log, vkCreateInstance(&info, NULL, &instance));
+    VK_CHECK(log, vkCreateInstance(&info, VK_ALLOC(inst), &instance));
     volkLoadInstance(instance);
     inst->instance = instance;
 
     if (debug) {
         VkDebugUtilsMessengerEXT debug_utils_messenger;
-        vkCreateDebugUtilsMessengerEXT(instance, &debug_info, NULL, &debug_utils_messenger);
+        vkCreateDebugUtilsMessengerEXT(instance, &debug_info, VK_ALLOC(instance),
+                                       &debug_utils_messenger);
     }
 
     ETNA_VEC_FREE(&used_exts);

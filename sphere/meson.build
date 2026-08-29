@@ -7,6 +7,6 @@ sdl_dep = dependency('sdl3', default_options: ['default_library=static'])
 executable(
     'sphere',
     player_sources,
-    dependencies: [etna_dep, sdl_dep],
+    dependencies: [etna_dep, sdl_dep, volk_includes_dep],
     include_directories: include_directories('src'),
 )
