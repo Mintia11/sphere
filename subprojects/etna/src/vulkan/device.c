@@ -5,6 +5,7 @@
 #include "log.h"
 #include "surface.h"
 #include "vec.h"
+#include "cmdpool.h"
 
 const char* vk_device_exts[] = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
@@ -232,6 +233,11 @@ etna_vk_device_t* etna_vk_create_device(etna_vk_instance_t* inst, etna_vk_surfac
     device->physical_device = physical_device;
     device->device = device_handle;
 
+    device->graphics_pool =
+        etna_vk_create_cmdpool(device, graphics_queue, &queue_families[graphics_queue]);
+    device->decode_pool =
+        etna_vk_create_cmdpool(device, decode_queue, &queue_families[decode_queue]);
+
     ETNA_FREE(video_props);
     ETNA_FREE(queue_families);
     ETNA_FREE(exts);
@@ -242,6 +248,8 @@ etna_vk_device_t* etna_vk_create_device(etna_vk_instance_t* inst, etna_vk_surfac
 }
 
 void etna_vk_destroy_device(etna_vk_device_t* device) {
+    etna_vk_destroy_cmdpool(device->graphics_pool);
+    etna_vk_destroy_cmdpool(device->decode_pool);
     vkDestroyDevice(device->device, VK_ALLOC(device));
     ETNA_FREE(device->log_scope);
     ETNA_FREE(device);

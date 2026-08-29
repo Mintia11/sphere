@@ -19,7 +19,7 @@ volk_options.add_cmake_defines(
 
 volk_proj = cmake.subproject('volk', options: volk_options)
 volk_dep = volk_proj.dependency('volk')
-volk_includes_dep = volk_dep.partial_dependency(compile_args : true, includes : true)
+volk_includes_dep = volk_dep.partial_dependency(compile_args: true, includes: true)
 
 if get_option('buildtype') == 'debug'
     if cc.get_id() in ['clang', 'gcc']
@@ -34,6 +34,7 @@ etna_sources = files(
     'src/alloc.c',
     'src/log.c',
     'src/vulkan/alloc.c',
+    'src/vulkan/cmdpool.c',
     'src/vulkan/device.c',
     'src/vulkan/instance.c',
     'src/vulkan/surface.c',
