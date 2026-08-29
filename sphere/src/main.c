@@ -6,6 +6,7 @@
 #include <SDL3/SDL.h>
 #include <Windows.h>
 #include <vulkan/surface.h>
+#include <vulkan/device.h>
 
 int main() {
     etna_allocator_init_global();
@@ -28,6 +29,8 @@ int main() {
     etna_vk_surface_t* surf = etna_vk_create_surface(
         &(etna_vk_surface_create_info_t){.hwnd = hwnd, .inst = inst, .hinstance = hinstance});
 
+    etna_vk_device_t* device = etna_vk_create_device(inst, surf);
+
     bool is_running = true;
     SDL_Event event = {0};
     while (is_running) {
@@ -42,6 +45,7 @@ int main() {
         }
     }
 
+    etna_vk_destroy_device(device);
     etna_vk_destroy_surface(surf);
     etna_vk_destroy_instance(inst);
 }

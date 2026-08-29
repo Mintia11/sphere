@@ -34,6 +34,7 @@ etna_sources = files(
     'src/alloc.c',
     'src/log.c',
     'src/vulkan/alloc.c',
+    'src/vulkan/device.c',
     'src/vulkan/instance.c',
     'src/vulkan/surface.c',
 )
