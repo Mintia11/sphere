@@ -1,5 +1,6 @@
 #include "instance.h"
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include "alloc.h"
 #include "common.h"
@@ -159,11 +160,18 @@ etna_vk_instance_t* etna_vk_create_instance(bool debug) {
 
     for (size_t i = 0; i < sizeof(vk_instance_exts) / sizeof(vk_instance_exts[0]); i++) {
         const char* ext = vk_instance_exts[i];
+        bool found = false;
         for (size_t j = 0; j < global_ext_count; j++) {
             if (strcmp(ext, global_ext[j].extensionName) == 0) {
                 ETNA_VEC_PUSH(&used_exts, ext);
+                found = true;
                 break;
             }
+        }
+
+        if (!found) {
+            ETNA_FATAL(log, "could not find required extension %s\n", ext);
+            exit(1);
         }
     }
 
