@@ -27,3 +27,11 @@ void etna_vk_destroy_surface(etna_vk_surface_t* surf) {
     ETNA_FREE(surf->log_scope);
     ETNA_FREE(surf);
 }
+
+bool etna_vk_surface_supports_present(etna_vk_surface_t* surf, VkPhysicalDevice phys_dev,
+                                      uint32_t queue_family_idx) {
+    VkBool32 out = false;
+    VK_CHECK(surf->log_scope,
+             vkGetPhysicalDeviceSurfaceSupportKHR(phys_dev, queue_family_idx, surf->surface, &out));
+    return out != 0;
+}

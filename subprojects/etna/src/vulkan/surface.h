@@ -19,3 +19,5 @@ typedef struct {
 
 etna_vk_surface_t* etna_vk_create_surface(etna_vk_surface_create_info_t* info);
 void etna_vk_destroy_surface(etna_vk_surface_t* surf);
+bool etna_vk_surface_supports_present(etna_vk_surface_t* surf, VkPhysicalDevice phys_dev,
+                                      uint32_t queue_family_idx);
