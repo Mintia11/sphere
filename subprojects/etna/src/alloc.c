@@ -105,6 +105,8 @@ void* etna_allocator_allocate(etna_allocator_t* alloc, const void* parent, size_
 
     if (bucket_idx == -1) {
         etna_alloc_t* allocation = malloc(size);
+        memset(allocation, 0, size);
+
         allocation->is_large = true;
         allocation->parent = parent_alloc;
         allocation->refcount = 1;
@@ -125,6 +127,7 @@ void* etna_allocator_allocate(etna_allocator_t* alloc, const void* parent, size_
     etna_alloc_t* our_allocation = (etna_alloc_t*)alloc->buckets[bucket_idx]->first_free;
     alloc->buckets[bucket_idx]->first_free = *alloc->buckets[bucket_idx]->first_free;
 
+    memset(our_allocation, 0, size);
     our_allocation->parent = parent_alloc;
     our_allocation->refcount = 1;
     memcpy(our_allocation->sentinel, ETNA_ALLOC_SENTINEL_VALUE, 3);
