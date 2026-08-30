@@ -26,7 +26,6 @@ typedef struct etna_alloc_bucket_header {
         void** first_free;
         struct etna_alloc_bucket_header* parent;
     };
-    struct etna_allocator* allocator;
 } etna_alloc_bucket_header_t;
 
 typedef struct etna_allocator {
@@ -56,6 +55,8 @@ typedef struct etna_allocator {
     etna_allocator_allocate(etna_global_alloc, parent, sizeof(type) * (count))
 #define ETNA_REALLOC(data, new_size) etna_allocator_realloc(etna_global_alloc, data, new_size)
 #define ETNA_FREE(data) etna_allocator_free(etna_global_alloc, data)
+#define ETNA_ADDREF(data) etna_allocator_add_ref(etna_global_alloc, data)
+#define ETNA_REFCOUNT(data) etna_allocator_get_refcount(etna_global_alloc, data)
 
 void etna_allocator_init_global();
 etna_allocator_t* etna_allocator_new(const size_t* bucket_sizes, const size_t bucket_count);
@@ -64,3 +65,5 @@ void etna_allocator_init(etna_allocator_t* alloc, const size_t* bucket_sizes,
 void* etna_allocator_allocate(etna_allocator_t* alloc, const void* parent, size_t size);
 void* etna_allocator_realloc(etna_allocator_t* alloc, void* data, const size_t new_size);
 int etna_allocator_free(etna_allocator_t* alloc, void* data);
+int etna_allocator_add_ref(etna_allocator_t* alloc, void* data);
+uint32_t etna_allocator_get_refcount(etna_allocator_t* alloc, void* data);

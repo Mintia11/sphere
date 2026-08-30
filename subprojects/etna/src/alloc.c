@@ -52,7 +52,6 @@ static void init_bucket(etna_allocator_t* alloc, const size_t bucket_idx, const 
     }
 
     etna_alloc_bucket_header_t* hdr = (etna_alloc_bucket_header_t*)mem;
-    hdr->allocator = alloc;
     hdr->size = size;
 
     size_t entry_count = ((64 * 1024) / size);
@@ -95,6 +94,10 @@ void* etna_allocator_allocate(etna_allocator_t* alloc, const void* parent, size_
 
     etna_mutex_lock(&alloc->mtx);
 
+    if (parent_alloc) {
+        atomic_fetch_add_explicit(&parent_alloc->refcount, 1, memory_order_acquire);
+    }
+
     int bucket_idx = -1;
     for (size_t i = 0; i < alloc->bucket_count; i++) {
         if (alloc->bucket_sizes[i] >= size) {
@@ -131,10 +134,6 @@ void* etna_allocator_allocate(etna_allocator_t* alloc, const void* parent, size_
     our_allocation->parent = parent_alloc;
     our_allocation->refcount = 1;
     memcpy(our_allocation->sentinel, ETNA_ALLOC_SENTINEL_VALUE, 3);
-
-    if (parent_alloc) {
-        atomic_fetch_add_explicit(&parent_alloc->refcount, 1, memory_order_acquire);
-    }
 
     etna_mutex_unlock(&alloc->mtx);
 
@@ -213,16 +212,17 @@ int etna_allocator_free(etna_allocator_t* alloc, void* data) {
         exit(1);
     }
 
-    etna_mutex_lock(&alloc->mtx);
+    atomic_fetch_sub_explicit(&allocation->refcount, 1, memory_order_release);
 
-    if (atomic_load_explicit(&allocation->refcount, memory_order_seq_cst) != 1) {
-        etna_mutex_unlock(&alloc->mtx);
+    if (atomic_load_explicit(&allocation->refcount, memory_order_seq_cst) != 0) {
         return atomic_load_explicit(&allocation->refcount, memory_order_seq_cst);
     }
 
     if (allocation->parent) {
         atomic_fetch_sub_explicit(&allocation->parent->refcount, 1, memory_order_release);
     }
+
+    etna_mutex_lock(&alloc->mtx);
 
     if (allocation->is_large) {
         free(allocation);
@@ -242,4 +242,34 @@ int etna_allocator_free(etna_allocator_t* alloc, void* data) {
 
     etna_mutex_unlock(&alloc->mtx);
     return 0;
+}
+
+int etna_allocator_add_ref(etna_allocator_t* alloc, void* data) {
+    etna_alloc_t* allocation = ETNA_ALLOCATION_GET(data);
+    if (memcmp(allocation->sentinel, ETNA_ALLOC_SENTINEL_VALUE, 3) != 0) {
+        ETNA_FATAL(alloc->scope,
+                   "fatal: tried to add a ref to an allocation at %p not tracked by this allocator",
+                   data);
+        exit(1);
+    }
+
+    atomic_uint_fast32_t refcount =
+        atomic_fetch_add_explicit(&allocation->refcount, 1, memory_order_acquire);
+    return refcount;
+}
+
+uint32_t etna_allocator_get_refcount(etna_allocator_t* alloc, void* data) {
+    etna_alloc_t* allocation = ETNA_ALLOCATION_GET(data);
+    if (memcmp(allocation->sentinel, ETNA_ALLOC_SENTINEL_VALUE, 3) != 0 &&
+        memcmp(allocation->sentinel, ETNA_FREE_SENTINEL_VALUE, 3) != 0) {
+        ETNA_FATAL(
+            alloc->scope,
+            "fatal: tried to get the refcount of an allocation at %p not tracked by this allocator",
+            data);
+        exit(1);
+    }
+
+    atomic_uint_fast32_t refcount =
+        atomic_load_explicit(&allocation->refcount, memory_order_seq_cst);
+    return refcount;
 }

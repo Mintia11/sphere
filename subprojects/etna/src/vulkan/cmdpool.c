@@ -1,4 +1,6 @@
 #include "cmdpool.h"
+#include <stdlib.h>
+#include "alloc.h"
 #include "common.h"
 #include "vec.h"
 
@@ -77,4 +79,10 @@ void etna_vk_destroy_cmdpool(etna_vk_cmdpool_t* cmdpool) {
     ETNA_VEC_FREE(&cmdpool->queues);
     vkDestroyCommandPool(device->device, cmdpool->pool, VK_ALLOC(cmdpool));
     ETNA_FREE(cmdpool);
+
+    if (ETNA_REFCOUNT(cmdpool) != 0) {
+        ETNA_FATAL(NULL, "tried to free command pool with %d active references\n",
+                   ETNA_REFCOUNT(cmdpool));
+        exit(1);
+    }
 }

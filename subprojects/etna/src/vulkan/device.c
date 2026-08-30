@@ -185,6 +185,11 @@ etna_vk_device_t* etna_vk_create_device(etna_vk_instance_t* inst, etna_vk_surfac
         ETNA_VEC_PUSH(&queue_infos, info);
     }
 
+    VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR swapchain_maintenance1 = {0};
+    swapchain_maintenance1.sType =
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR;
+    swapchain_maintenance1.swapchainMaintenance1 = VK_TRUE;
+
     VkPhysicalDeviceInternallySynchronizedQueuesFeaturesKHR internally_synchronized_queues = {0};
     internally_synchronized_queues.sType =
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INTERNALLY_SYNCHRONIZED_QUEUES_FEATURES_KHR;
@@ -227,6 +232,7 @@ etna_vk_device_t* etna_vk_create_device(etna_vk_instance_t* inst, etna_vk_surfac
     VK_PUSH(&create_info, &features13);
     VK_PUSH(&create_info, &features14);
     VK_PUSH(&create_info, &internally_synchronized_queues);
+    VK_PUSH(&create_info, &swapchain_maintenance1);
 
     VkDevice device_handle = NULL;
     VK_CHECK(log, vkCreateDevice(physical_device, &create_info, VK_ALLOC(device), &device_handle));
@@ -253,4 +259,9 @@ void etna_vk_destroy_device(etna_vk_device_t* device) {
     vkDestroyDevice(device->device, VK_ALLOC(device));
     ETNA_FREE(device->log_scope);
     ETNA_FREE(device);
+
+    if (ETNA_REFCOUNT(device) != 0) {
+        ETNA_FATAL(NULL, "tried to free device with %d active references\n", ETNA_REFCOUNT(device));
+        exit(1);
+    }
 }

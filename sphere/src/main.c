@@ -7,6 +7,7 @@
 #include <Windows.h>
 #include <vulkan/surface.h>
 #include <vulkan/device.h>
+#include <vulkan/swapchain.h>
 
 int main() {
     etna_allocator_init_global();
@@ -30,6 +31,9 @@ int main() {
         &(etna_vk_surface_create_info_t){.hwnd = hwnd, .inst = inst, .hinstance = hinstance});
 
     etna_vk_device_t* device = etna_vk_create_device(inst, surf);
+    etna_vk_swapchain_t* swapchain =
+        etna_vk_create_swapchain(device, surf, VK_FORMAT_R8G8B8A8_UNORM,
+                                 VK_COLOR_SPACE_SRGB_NONLINEAR_KHR, VK_PRESENT_MODE_MAILBOX_KHR);
 
     bool is_running = true;
     SDL_Event event = {0};
@@ -45,6 +49,7 @@ int main() {
         }
     }
 
+    etna_vk_destroy_swapchain(swapchain);
     etna_vk_destroy_device(device);
     etna_vk_destroy_surface(surf);
     etna_vk_destroy_instance(inst);
