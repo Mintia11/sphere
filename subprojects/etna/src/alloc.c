@@ -201,6 +201,10 @@ void* etna_allocator_realloc(etna_allocator_t* alloc, void* data, const size_t n
 }
 
 int etna_allocator_free(etna_allocator_t* alloc, void* data) {
+    if (!data) {
+        return 0;
+    }
+
     etna_alloc_t* allocation = ETNA_ALLOCATION_GET(data);
 
     if (memcmp(allocation->sentinel, ETNA_FREE_SENTINEL_VALUE, 3) == 0) {

@@ -18,7 +18,5 @@ void* etna_vulkan_reallocate(void* pUserData, void* pOriginal, size_t size, size
 
 void etna_vulkan_free(void* pUserData, void* pMemory) {
     (void)pUserData;
-    if (pMemory) {
-        ETNA_FREE(pMemory);
-    }
+    ETNA_FREE(pMemory);
 }

@@ -47,6 +47,10 @@ int main() {
                     break;
             }
         }
+
+        etna_vk_frame_t frame = {0};
+        etna_vk_swapchain_start_frame(swapchain, &frame);
+        etna_vk_swapchain_end_frame(swapchain);
     }
 
     etna_vk_destroy_swapchain(swapchain);

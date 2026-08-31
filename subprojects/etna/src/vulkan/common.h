@@ -3,12 +3,12 @@
 #include <volk.h>
 #include <vulkan/vk_enum_string_helper.h>
 
-#define VK_CHECK(scope, result)                                                    \
-    do {                                                                           \
-        VkResult res = (result);                                                   \
-        if (res != VK_SUCCESS) {                                                   \
-            ETNA_FATAL(scope, #result "(%s) != VK_SUCCESS", string_VkResult(res)); \
-        }                                                                          \
+#define VK_CHECK(scope, result)                                                  \
+    do {                                                                         \
+        VkResult r = (result);                                                   \
+        if (r != VK_SUCCESS) {                                                   \
+            ETNA_FATAL(scope, #result "(%s) != VK_SUCCESS", string_VkResult(r)); \
+        }                                                                        \
     } while (0)
 
 #define VK_PUSH(into, val)                                         \

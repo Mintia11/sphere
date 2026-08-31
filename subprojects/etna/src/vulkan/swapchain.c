@@ -1,6 +1,8 @@
 #include "swapchain.h"
 #include "alloc.h"
 #include "common.h"
+#include "vec.h"
+#include "cmdpool.h"
 
 void recreate_swapchain(etna_vk_swapchain_t* swapchain);
 
@@ -102,6 +104,27 @@ etna_vk_swapchain_t* etna_vk_create_swapchain(etna_vk_device_t* device, etna_vk_
 void etna_vk_destroy_swapchain(etna_vk_swapchain_t* swapchain) {
     etna_vk_device_t* device = ETNA_ALLOCATION_GET_PARENT(swapchain, etna_vk_device_t);
     VK_CHECK(swapchain->log_scope, vkDeviceWaitIdle(device->device));
+    ETNA_VEC_FOR_EACH_ENTRY(&swapchain->image_views, idx) {
+        vkDestroyImageView(device->device, ETNA_VEC_AT(&swapchain->image_views, idx),
+                           VK_ALLOC(swapchain));
+    }
+    ETNA_VEC_FOR_EACH_ENTRY(&swapchain->acquire_semaphores, idx) {
+        vkDestroySemaphore(device->device, ETNA_VEC_AT(&swapchain->acquire_semaphores, idx),
+                           VK_ALLOC(swapchain));
+    }
+    ETNA_VEC_FOR_EACH_ENTRY(&swapchain->release_semaphores, idx) {
+        vkDestroySemaphore(device->device, ETNA_VEC_AT(&swapchain->release_semaphores, idx),
+                           VK_ALLOC(swapchain));
+    }
+    ETNA_VEC_FOR_EACH_ENTRY(&swapchain->present_fences, idx) {
+        vkDestroyFence(device->device, ETNA_VEC_AT(&swapchain->present_fences, idx),
+                       VK_ALLOC(swapchain));
+    }
+    ETNA_VEC_FREE(&swapchain->image_views);
+    ETNA_VEC_FREE(&swapchain->acquire_semaphores);
+    ETNA_VEC_FREE(&swapchain->release_semaphores);
+    ETNA_VEC_FREE(&swapchain->present_fences);
+    ETNA_VEC_FREE(&swapchain->images);
     ETNA_FREE(swapchain->supported_formats);
     ETNA_FREE(swapchain->surface);  // decrease it's refcount
     ETNA_FREE(swapchain->log_scope);
@@ -173,4 +196,152 @@ void recreate_swapchain(etna_vk_swapchain_t* swapchain) {
                                   &swapchain->swapchain));
 
     swapchain->recreate = false;
+
+    uint32_t image_count = 0;
+    VK_CHECK(swapchain->log_scope,
+             vkGetSwapchainImagesKHR(device->device, swapchain->swapchain, &image_count, NULL));
+    ETNA_VEC_RESIZE(&swapchain->images, image_count);
+    VK_CHECK(swapchain->log_scope, vkGetSwapchainImagesKHR(device->device, swapchain->swapchain,
+                                                           &image_count, swapchain->images.data));
+
+    ETNA_VEC_FOR_EACH_ENTRY(&swapchain->image_views, idx) {
+        vkDestroyImageView(device->device, ETNA_VEC_AT(&swapchain->image_views, idx),
+                           VK_ALLOC(swapchain));
+    }
+    ETNA_VEC_FOR_EACH_ENTRY(&swapchain->acquire_semaphores, idx) {
+        vkDestroySemaphore(device->device, ETNA_VEC_AT(&swapchain->acquire_semaphores, idx),
+                           VK_ALLOC(swapchain));
+    }
+    ETNA_VEC_FOR_EACH_ENTRY(&swapchain->release_semaphores, idx) {
+        vkDestroySemaphore(device->device, ETNA_VEC_AT(&swapchain->release_semaphores, idx),
+                           VK_ALLOC(swapchain));
+    }
+    ETNA_VEC_FOR_EACH_ENTRY(&swapchain->present_fences, idx) {
+        vkDestroyFence(device->device, ETNA_VEC_AT(&swapchain->present_fences, idx),
+                       VK_ALLOC(swapchain));
+    }
+
+    ETNA_VEC_FREE(&swapchain->image_views);
+    ETNA_VEC_FREE(&swapchain->acquire_semaphores);
+    ETNA_VEC_FREE(&swapchain->release_semaphores);
+    ETNA_VEC_FREE(&swapchain->present_fences);
+
+    VkImageViewCreateInfo view_info = {0};
+    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view_info.format = swapchain->selected_image_format;
+    view_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    view_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    view_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    view_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    view_info.subresourceRange.baseArrayLayer = 0;
+    view_info.subresourceRange.baseMipLevel = 0;
+    view_info.subresourceRange.layerCount = 1;
+    view_info.subresourceRange.levelCount = 1;
+
+    VkSemaphoreCreateInfo semaphore_info = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+    };
+    VkFenceCreateInfo fence_info = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+    };
+
+    for (uint32_t i = 0; i < image_count; i++) {
+        VkImageView view;
+        VkSemaphore acquire_semaphore;
+        VkSemaphore release_semaphore;
+        VkFence present_fence;
+
+        view_info.image = ETNA_VEC_AT(&swapchain->images, i);
+        VK_CHECK(swapchain->log_scope,
+                 vkCreateImageView(device->device, &view_info, VK_ALLOC(swapchain), &view));
+        VK_CHECK(swapchain->log_scope, vkCreateSemaphore(device->device, &semaphore_info,
+                                                         VK_ALLOC(swapchain), &acquire_semaphore));
+        VK_CHECK(swapchain->log_scope, vkCreateSemaphore(device->device, &semaphore_info,
+                                                         VK_ALLOC(swapchain), &release_semaphore));
+        VK_CHECK(swapchain->log_scope,
+                 vkCreateFence(device->device, &fence_info, VK_ALLOC(swapchain), &present_fence));
+
+        ETNA_VEC_PUSH(&swapchain->image_views, view);
+        ETNA_VEC_PUSH(&swapchain->acquire_semaphores, acquire_semaphore);
+        ETNA_VEC_PUSH(&swapchain->release_semaphores, release_semaphore);
+        ETNA_VEC_PUSH(&swapchain->present_fences, present_fence);
+    }
+}
+
+void etna_vk_swapchain_start_frame(etna_vk_swapchain_t* swapchain, etna_vk_frame_t* frame) {
+    etna_vk_device_t* device = ETNA_ALLOCATION_GET_PARENT(swapchain, etna_vk_device_t);
+
+    if (swapchain->recreate) {
+        recreate_swapchain(swapchain);
+    }
+
+    VkAcquireNextImageInfoKHR acquire_info = {0};
+    acquire_info.sType = VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR;
+    acquire_info.semaphore = ETNA_VEC_AT(&swapchain->acquire_semaphores, swapchain->image_idx);
+    acquire_info.timeout = ~0;
+    acquire_info.swapchain = swapchain->swapchain;
+
+    VkResult res = vkAcquireNextImage2KHR(device->device, &acquire_info, &swapchain->image_idx);
+    switch (res) {
+        case VK_SUCCESS:
+            frame->image = ETNA_VEC_AT(&swapchain->images, swapchain->image_idx);
+            frame->image_view = ETNA_VEC_AT(&swapchain->image_views, swapchain->image_idx);
+            frame->acquire_semaphore =
+                ETNA_VEC_AT(&swapchain->acquire_semaphores, swapchain->image_idx);
+            frame->release_semaphore =
+                ETNA_VEC_AT(&swapchain->release_semaphores, swapchain->image_idx);
+            return;
+        case VK_ERROR_OUT_OF_DATE_KHR:
+            swapchain->recreate = true;
+            etna_vk_swapchain_start_frame(swapchain, frame);
+            return;
+        default:
+            VK_CHECK(swapchain->log_scope, res);
+            return;
+    }
+}
+
+void etna_vk_swapchain_end_frame(etna_vk_swapchain_t* swapchain) {
+    etna_vk_device_t* device = ETNA_ALLOCATION_GET_PARENT(swapchain, etna_vk_device_t);
+    if (swapchain->recreate) {
+        return;
+    }
+
+    vkResetFences(device->device, 1,
+                  &ETNA_VEC_AT(&swapchain->present_fences, swapchain->image_idx));
+
+    VkSwapchainPresentFenceInfoKHR fence_info = {
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR,
+        .swapchainCount = 1,
+        .pFences = &ETNA_VEC_AT(&swapchain->present_fences, swapchain->image_idx),
+    };
+
+    VkPresentInfoKHR present_info = {
+        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &ETNA_VEC_AT(&swapchain->release_semaphores, swapchain->image_idx),
+        .swapchainCount = 1,
+        .pSwapchains = &swapchain->swapchain,
+        .pImageIndices = &swapchain->image_idx,
+    };
+
+    VK_PUSH(&present_info, &fence_info);
+
+    VkResult res = vkQueuePresentKHR(ETNA_VEC_AT(&device->graphics_pool->queues, 0), &present_info);
+    switch (res) {
+        case VK_SUCCESS:
+            return;
+        case VK_ERROR_OUT_OF_DATE_KHR:
+            swapchain->recreate = true;
+            return;
+        default:
+            VK_CHECK(swapchain->log_scope, res);
+            return;
+    }
 }

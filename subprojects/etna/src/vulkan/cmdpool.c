@@ -35,7 +35,7 @@ etna_vk_cmdpool_t* etna_vk_create_cmdpool(etna_vk_device_t* device, uint32_t que
 
     VK_PUSH(&create_info, &type_info);
 
-    for (uint32_t i = 0; i < queue_count; i++) {
+    for (uint32_t i = 0; i < 1; i++) {
         VkQueue queue = NULL;
         VkDeviceQueueInfo2 queue_info = {
             .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2,
