@@ -86,3 +86,82 @@ void etna_vk_destroy_cmdpool(etna_vk_cmdpool_t* cmdpool) {
         exit(1);
     }
 }
+
+etna_vk_cmdbuf_t* etna_vk_alloc_cmdbuffer(etna_vk_cmdpool_t* cmdpool) {
+    etna_vk_device_t* device = ETNA_ALLOCATION_GET_PARENT(cmdpool, etna_vk_device_t);
+
+    VkCommandBufferAllocateInfo alloc_info = {0};
+    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    alloc_info.commandPool = cmdpool->pool;
+    alloc_info.commandBufferCount = 1;
+    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+    VkCommandBuffer out = NULL;
+    VK_CHECK(cmdpool->log_scope, vkAllocateCommandBuffers(device->device, &alloc_info, &out));
+
+    etna_log_scope_t* log = etna_log_scope_new("cmdbuf", cmdpool->log_scope);
+    etna_vk_cmdbuf_t* cmdbuf = ETNA_ALLOC_TYPE(cmdpool, etna_vk_cmdbuf_t);
+    cmdbuf->log_scope = log;
+    cmdbuf->buf = out;
+
+    return cmdbuf;
+}
+
+void etna_vk_submit_cmdbuf(etna_vk_cmdbuf_t* cmdbuf) {
+    etna_vk_cmdpool_t* cmdpool = ETNA_ALLOCATION_GET_PARENT(cmdbuf, etna_vk_cmdpool_t);
+
+    VkCommandBufferSubmitInfo cmdbuf_info = {0};
+    cmdbuf_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+    cmdbuf_info.commandBuffer = cmdbuf->buf;
+    cmdbuf_info.deviceMask = 1;
+
+    ETNA_VEC(VkSemaphoreSubmitInfo) wait_infos = ETNA_VEC_INIT;
+    ETNA_VEC(VkSemaphoreSubmitInfo) signal_infos = ETNA_VEC_INIT;
+
+    ETNA_VEC_FOR_EACH_ENTRY(&cmdbuf->wait_binary, idx) {
+        VkSemaphore sema = ETNA_VEC_AT(&cmdbuf->wait_binary, idx);
+
+        VkSemaphoreSubmitInfo info = {0};
+        info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        info.semaphore = sema;
+        info.deviceIndex = 1;
+
+        ETNA_VEC_PUSH(&wait_infos, info);
+    }
+
+    ETNA_VEC_FOR_EACH_ENTRY(&cmdbuf->signal_binary, idx) {
+        VkSemaphore sema = ETNA_VEC_AT(&cmdbuf->signal_binary, idx);
+
+        VkSemaphoreSubmitInfo info = {0};
+        info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        info.semaphore = sema;
+        info.deviceIndex = 1;
+
+        ETNA_VEC_PUSH(&signal_infos, info);
+    }
+
+    VkSubmitInfo2 submit_info = {0};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+    submit_info.commandBufferInfoCount = 1;
+    submit_info.pCommandBufferInfos = &cmdbuf_info;
+    submit_info.waitSemaphoreInfoCount = wait_infos.length;
+    submit_info.pWaitSemaphoreInfos = wait_infos.data;
+    submit_info.signalSemaphoreInfoCount = signal_infos.length;
+    submit_info.pSignalSemaphoreInfos = signal_infos.data;
+
+    VK_CHECK(cmdpool->log_scope,
+             vkQueueSubmit2(ETNA_VEC_AT(&cmdpool->queues, 0), 1, &submit_info, NULL));
+
+    ETNA_VEC_FREE(&signal_infos);
+    ETNA_VEC_FREE(&wait_infos);
+    ETNA_VEC_FREE(&cmdbuf->signal_binary);
+    ETNA_VEC_FREE(&cmdbuf->wait_binary);
+    ETNA_FREE(cmdbuf->log_scope);
+    ETNA_FREE(cmdbuf);
+
+    if (ETNA_REFCOUNT(cmdbuf) != 0) {
+        ETNA_FATAL(cmdpool->log_scope, "tried to free command buffer with %d active references\n",
+                   ETNA_REFCOUNT(cmdbuf));
+        exit(1);
+    }
+}

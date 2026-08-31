@@ -8,6 +8,8 @@
 #include <vulkan/surface.h>
 #include <vulkan/device.h>
 #include <vulkan/swapchain.h>
+#include <vulkan/cmdpool.h>
+#include <vulkan/cmd.h>
 
 int main() {
     etna_allocator_init_global();
@@ -48,8 +50,17 @@ int main() {
             }
         }
 
+        etna_vk_cmdbuf_t* cmdbuf = etna_vk_alloc_cmdbuffer(device->graphics_pool);
+
         etna_vk_frame_t frame = {0};
         etna_vk_swapchain_start_frame(swapchain, &frame);
+        etna_vk_cmd_begin(cmdbuf);
+        etna_vk_cmd_end(cmdbuf);
+
+        etna_vk_cmd_wait_binary(cmdbuf, frame.acquire_semaphore);
+        etna_vk_cmd_signal_binary(cmdbuf, frame.release_semaphore);
+        etna_vk_submit_cmdbuf(cmdbuf);
+
         etna_vk_swapchain_end_frame(swapchain);
     }
 

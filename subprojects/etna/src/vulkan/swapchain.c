@@ -283,6 +283,7 @@ void etna_vk_swapchain_start_frame(etna_vk_swapchain_t* swapchain, etna_vk_frame
 
     VkAcquireNextImageInfoKHR acquire_info = {0};
     acquire_info.sType = VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR;
+    acquire_info.deviceMask = 1;
     acquire_info.semaphore = ETNA_VEC_AT(&swapchain->acquire_semaphores, swapchain->image_idx);
     acquire_info.timeout = ~0;
     acquire_info.swapchain = swapchain->swapchain;
