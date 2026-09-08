@@ -3,6 +3,7 @@
 #include "cmd.h"
 #include "device.h"
 #include "log.h"
+#include "sync.h"
 #include "vec.h"
 #include <volk.h>
 
@@ -11,7 +12,7 @@ typedef struct etna_vk_cmdpool {
     uint32_t queue_family_idx;
     VkCommandPool pool;
     ETNA_VEC(VkQueue) queues;
-    ETNA_VEC(VkSemaphore) semaphores;
+    ETNA_VEC(etna_vk_semaphore_t*) semaphores;
 } etna_vk_cmdpool_t;
 
 etna_vk_cmdpool_t* etna_vk_create_cmdpool(etna_vk_device_t* device, uint32_t queue_family_idx,

@@ -40,6 +40,7 @@ etna_sources = files(
     'src/vulkan/instance.c',
     'src/vulkan/surface.c',
     'src/vulkan/swapchain.c',
+    'src/vulkan/sync.c',
 )
 
 etna_inc = include_directories('src')

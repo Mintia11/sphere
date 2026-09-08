@@ -20,21 +20,6 @@ etna_vk_cmdpool_t* etna_vk_create_cmdpool(etna_vk_device_t* device, uint32_t que
     etna_vk_cmdpool_t* cmdpool = ETNA_ALLOC_TYPE(device, etna_vk_cmdpool_t);
     cmdpool->log_scope = log;
 
-    VkSemaphoreTypeCreateInfo type_info = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-        .pNext = NULL,
-        .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-        .initialValue = 0,
-    };
-
-    VkSemaphoreCreateInfo create_info = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-        .pNext = NULL,
-        .flags = 0,
-    };
-
-    VK_PUSH(&create_info, &type_info);
-
     for (uint32_t i = 0; i < 1; i++) {
         VkQueue queue = NULL;
         VkDeviceQueueInfo2 queue_info = {
@@ -46,10 +31,7 @@ etna_vk_cmdpool_t* etna_vk_create_cmdpool(etna_vk_device_t* device, uint32_t que
         vkGetDeviceQueue2(device->device, &queue_info, &queue);
         ETNA_VEC_PUSH(&cmdpool->queues, queue);
 
-        VkSemaphore semaphore;
-        VK_CHECK(log,
-                 vkCreateSemaphore(device->device, &create_info, VK_ALLOC(cmdpool), &semaphore));
-        ETNA_VEC_PUSH(&cmdpool->semaphores, semaphore);
+        ETNA_VEC_PUSH(&cmdpool->semaphores, etna_vk_create_semaphore(device, 0));
     }
 
     VkCommandPoolCreateInfo cmdpool_info = {
@@ -71,15 +53,13 @@ void etna_vk_destroy_cmdpool(etna_vk_cmdpool_t* cmdpool) {
 
     ETNA_FREE(cmdpool->log_scope);
     ETNA_VEC_FOR_EACH_ENTRY(&cmdpool->semaphores, idx) {
-        vkDestroySemaphore(device->device, ETNA_VEC_AT(&cmdpool->semaphores, idx),
-                           VK_ALLOC(cmdpool));
+        etna_vk_destroy_semaphore(ETNA_VEC_AT(&cmdpool->semaphores, idx));
     }
     ETNA_VEC_FREE(&cmdpool->semaphores);
     ETNA_VEC_FREE(&cmdpool->queues);
     vkDestroyCommandPool(device->device, cmdpool->pool, VK_ALLOC(cmdpool));
-    ETNA_FREE(cmdpool);
 
-    if (ETNA_REFCOUNT(cmdpool) != 0) {
+    if (ETNA_FREE(cmdpool) != 0) {
         ETNA_FATAL(NULL, "tried to free command pool with %d active references\n",
                    ETNA_REFCOUNT(cmdpool));
         exit(1);
