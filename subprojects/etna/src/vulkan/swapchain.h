@@ -4,6 +4,7 @@
 #include "log.h"
 #include "surface.h"
 #include "vec.h"
+#include "image.h"
 #include <volk.h>
 
 typedef struct {
@@ -16,21 +17,22 @@ typedef struct {
 
     VkSwapchainKHR swapchain;
     bool recreate;
+    uint32_t image_idx;
     ETNA_VEC(VkImage) images;
     ETNA_VEC(VkImageView) image_views;
+    uint32_t frame_idx;
     ETNA_VEC(VkSemaphore) acquire_semaphores;
     ETNA_VEC(VkSemaphore) release_semaphores;
     ETNA_VEC(VkFence) present_fences;
-    uint32_t image_idx;
 
     VkFormat selected_image_format;
     VkColorSpaceKHR selected_color_space;
     VkPresentModeKHR selected_present_mode;
+    uint32_t image_count;
 } etna_vk_swapchain_t;
 
 typedef struct {
-    VkImage image;
-    VkImageView image_view;
+    etna_vk_image_t image;
     VkSemaphore acquire_semaphore;
     VkSemaphore release_semaphore;
 } etna_vk_frame_t;

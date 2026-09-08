@@ -297,10 +297,9 @@ void etna_vk_destroy_instance(etna_vk_instance_t* inst) {
     vkDestroyInstance(inst->instance, VK_ALLOC(inst));
     ETNA_FREE(inst->log_scope);
     volkFinalize();
-    ETNA_FREE(inst);
 
     // Nvidia driver version 616.56 leaks an allocation so ignore this
-    if (ETNA_REFCOUNT(inst) != 0) {
+    if (ETNA_FREE(inst) != 0) {
         ETNA_TRACE(NULL, "tried to free instance (%p) with %d active references\n", inst,
                    ETNA_REFCOUNT(inst));
         // exit(1);

@@ -40,7 +40,6 @@ etna_vk_cmdpool_t* etna_vk_create_cmdpool(etna_vk_device_t* device, uint32_t que
         VkDeviceQueueInfo2 queue_info = {
             .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2,
             .pNext = NULL,
-            .flags = VK_DEVICE_QUEUE_CREATE_INTERNALLY_SYNCHRONIZED_BIT_KHR,
             .queueFamilyIndex = queue_family_idx,
             .queueIndex = i,
         };
@@ -119,23 +118,25 @@ void etna_vk_submit_cmdbuf(etna_vk_cmdbuf_t* cmdbuf) {
     ETNA_VEC(VkSemaphoreSubmitInfo) signal_infos = ETNA_VEC_INIT;
 
     ETNA_VEC_FOR_EACH_ENTRY(&cmdbuf->wait_binary, idx) {
-        VkSemaphore sema = ETNA_VEC_AT(&cmdbuf->wait_binary, idx);
+        etna_vk_cmdbuf_semaphore_t sema = ETNA_VEC_AT(&cmdbuf->wait_binary, idx);
 
         VkSemaphoreSubmitInfo info = {0};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-        info.semaphore = sema;
+        info.semaphore = sema.semaphore;
         info.deviceIndex = 1;
+        info.stageMask = sema.stage_mask;
 
         ETNA_VEC_PUSH(&wait_infos, info);
     }
 
     ETNA_VEC_FOR_EACH_ENTRY(&cmdbuf->signal_binary, idx) {
-        VkSemaphore sema = ETNA_VEC_AT(&cmdbuf->signal_binary, idx);
+        etna_vk_cmdbuf_semaphore_t sema = ETNA_VEC_AT(&cmdbuf->signal_binary, idx);
 
         VkSemaphoreSubmitInfo info = {0};
         info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-        info.semaphore = sema;
+        info.semaphore = sema.semaphore;
         info.deviceIndex = 1;
+        info.stageMask = sema.stage_mask;
 
         ETNA_VEC_PUSH(&signal_infos, info);
     }
@@ -157,9 +158,8 @@ void etna_vk_submit_cmdbuf(etna_vk_cmdbuf_t* cmdbuf) {
     ETNA_VEC_FREE(&cmdbuf->signal_binary);
     ETNA_VEC_FREE(&cmdbuf->wait_binary);
     ETNA_FREE(cmdbuf->log_scope);
-    ETNA_FREE(cmdbuf);
 
-    if (ETNA_REFCOUNT(cmdbuf) != 0) {
+    if (ETNA_FREE(cmdbuf) != 0) {
         ETNA_FATAL(cmdpool->log_scope, "tried to free command buffer with %d active references\n",
                    ETNA_REFCOUNT(cmdbuf));
         exit(1);

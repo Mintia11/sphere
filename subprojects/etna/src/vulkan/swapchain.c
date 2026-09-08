@@ -80,13 +80,6 @@ etna_vk_swapchain_t* etna_vk_create_swapchain(etna_vk_device_t* device, etna_vk_
         color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     }
 
-    VkSurfaceCapabilities2KHR surface_caps = {0};
-    surface_caps.sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR;
-
-    VK_CHECK(log, vkGetPhysicalDeviceSurfaceCapabilities2KHR(device->physical_device, &surface_info,
-                                                             &surface_caps));
-
-    swapchain->caps = surface_caps;
     swapchain->selected_color_space = color_space;
     swapchain->selected_image_format = image_format;
     swapchain->selected_present_mode = present_mode;
@@ -129,9 +122,8 @@ void etna_vk_destroy_swapchain(etna_vk_swapchain_t* swapchain) {
     ETNA_FREE(swapchain->surface);  // decrease it's refcount
     ETNA_FREE(swapchain->log_scope);
     vkDestroySwapchainKHR(device->device, swapchain->swapchain, VK_ALLOC(swapchain));
-    ETNA_FREE(swapchain);
 
-    if (ETNA_REFCOUNT(swapchain) != 0) {
+    if (ETNA_FREE(swapchain) != 0) {
         ETNA_FATAL(NULL, "tried to free swapchain with %d active references\n",
                    ETNA_REFCOUNT(swapchain));
         exit(1);
@@ -165,6 +157,26 @@ void etna_vk_swapchain_change_format(etna_vk_swapchain_t* swapchain, VkFormat im
 }
 
 void recreate_swapchain(etna_vk_swapchain_t* swapchain) {
+    etna_vk_device_t* device = ETNA_ALLOCATION_GET_PARENT(swapchain, etna_vk_device_t);
+
+    VkPhysicalDeviceSurfaceInfo2KHR surface_info = {0};
+    surface_info.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR;
+    surface_info.surface = swapchain->surface->surface;
+
+    VkSurfacePresentModeKHR present_mode_info = {0};
+    present_mode_info.sType = VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_KHR;
+    present_mode_info.presentMode = swapchain->selected_present_mode;
+
+    VK_PUSH(&surface_info, &present_mode_info);
+
+    VkSurfaceCapabilities2KHR surface_caps = {0};
+    surface_caps.sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR;
+
+    VK_CHECK(swapchain->log_scope, vkGetPhysicalDeviceSurfaceCapabilities2KHR(
+                                       device->physical_device, &surface_info, &surface_caps));
+
+    swapchain->caps = surface_caps;
+
     VkSwapchainCreateInfoKHR create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     create_info.surface = swapchain->surface->surface;
@@ -177,7 +189,7 @@ void recreate_swapchain(etna_vk_swapchain_t* swapchain) {
     create_info.imageArrayLayers = 1;
     create_info.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    create_info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+    create_info.preTransform = surface_caps.surfaceCapabilities.currentTransform;
     create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     create_info.presentMode = swapchain->selected_present_mode;
     create_info.clipped = VK_FALSE;
@@ -190,12 +202,23 @@ void recreate_swapchain(etna_vk_swapchain_t* swapchain) {
 
     VK_PUSH(&create_info, &present_modes);
 
-    etna_vk_device_t* device = ETNA_ALLOCATION_GET_PARENT(swapchain, etna_vk_device_t);
+    bool had_old = swapchain->swapchain != VK_NULL_HANDLE;
+
+    ETNA_VEC_FOR_EACH_ENTRY(&swapchain->present_fences, idx) {
+        VK_CHECK(swapchain->log_scope,
+                 vkWaitForFences(device->device, 1,
+                                 &ETNA_VEC_AT(&swapchain->present_fences, swapchain->frame_idx),
+                                 VK_TRUE, ~0));
+    }
+
     VK_CHECK(swapchain->log_scope,
              vkCreateSwapchainKHR(device->device, &create_info, VK_ALLOC(swapchain),
                                   &swapchain->swapchain));
 
     swapchain->recreate = false;
+    if (had_old) {
+        vkDestroySwapchainKHR(device->device, create_info.oldSwapchain, VK_ALLOC(swapchain));
+    }
 
     uint32_t image_count = 0;
     VK_CHECK(swapchain->log_scope,
@@ -272,6 +295,9 @@ void recreate_swapchain(etna_vk_swapchain_t* swapchain) {
         ETNA_VEC_PUSH(&swapchain->release_semaphores, release_semaphore);
         ETNA_VEC_PUSH(&swapchain->present_fences, present_fence);
     }
+
+    swapchain->image_count = image_count;
+    swapchain->frame_idx = 0;
 }
 
 void etna_vk_swapchain_start_frame(etna_vk_swapchain_t* swapchain, etna_vk_frame_t* frame) {
@@ -281,22 +307,36 @@ void etna_vk_swapchain_start_frame(etna_vk_swapchain_t* swapchain, etna_vk_frame
         recreate_swapchain(swapchain);
     }
 
+    VK_CHECK(swapchain->log_scope,
+             vkWaitForFences(device->device, 1,
+                             &ETNA_VEC_AT(&swapchain->present_fences, swapchain->frame_idx),
+                             VK_TRUE, ~0));
+    vkResetFences(device->device, 1,
+                  &ETNA_VEC_AT(&swapchain->present_fences, swapchain->frame_idx));
+
     VkAcquireNextImageInfoKHR acquire_info = {0};
     acquire_info.sType = VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR;
     acquire_info.deviceMask = 1;
-    acquire_info.semaphore = ETNA_VEC_AT(&swapchain->acquire_semaphores, swapchain->image_idx);
+    acquire_info.semaphore = ETNA_VEC_AT(&swapchain->acquire_semaphores, swapchain->frame_idx);
     acquire_info.timeout = ~0;
     acquire_info.swapchain = swapchain->swapchain;
 
     VkResult res = vkAcquireNextImage2KHR(device->device, &acquire_info, &swapchain->image_idx);
     switch (res) {
         case VK_SUCCESS:
-            frame->image = ETNA_VEC_AT(&swapchain->images, swapchain->image_idx);
-            frame->image_view = ETNA_VEC_AT(&swapchain->image_views, swapchain->image_idx);
+            frame->image.image = ETNA_VEC_AT(&swapchain->images, swapchain->image_idx);
+            frame->image.view = ETNA_VEC_AT(&swapchain->image_views, swapchain->image_idx);
+            frame->image.extent = swapchain->caps.surfaceCapabilities.currentExtent;
+            frame->image.format = swapchain->selected_image_format;
+            frame->image.current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+            frame->image.current_access = VK_ACCESS_NONE;
+            frame->image.current_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+
             frame->acquire_semaphore =
-                ETNA_VEC_AT(&swapchain->acquire_semaphores, swapchain->image_idx);
+                ETNA_VEC_AT(&swapchain->acquire_semaphores, swapchain->frame_idx);
             frame->release_semaphore =
-                ETNA_VEC_AT(&swapchain->release_semaphores, swapchain->image_idx);
+                ETNA_VEC_AT(&swapchain->release_semaphores, swapchain->frame_idx);
+
             return;
         case VK_ERROR_OUT_OF_DATE_KHR:
             swapchain->recreate = true;
@@ -314,19 +354,16 @@ void etna_vk_swapchain_end_frame(etna_vk_swapchain_t* swapchain) {
         return;
     }
 
-    vkResetFences(device->device, 1,
-                  &ETNA_VEC_AT(&swapchain->present_fences, swapchain->image_idx));
-
     VkSwapchainPresentFenceInfoKHR fence_info = {
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR,
         .swapchainCount = 1,
-        .pFences = &ETNA_VEC_AT(&swapchain->present_fences, swapchain->image_idx),
+        .pFences = &ETNA_VEC_AT(&swapchain->present_fences, swapchain->frame_idx),
     };
 
     VkPresentInfoKHR present_info = {
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &ETNA_VEC_AT(&swapchain->release_semaphores, swapchain->image_idx),
+        .pWaitSemaphores = &ETNA_VEC_AT(&swapchain->release_semaphores, swapchain->frame_idx),
         .swapchainCount = 1,
         .pSwapchains = &swapchain->swapchain,
         .pImageIndices = &swapchain->image_idx,
@@ -337,6 +374,7 @@ void etna_vk_swapchain_end_frame(etna_vk_swapchain_t* swapchain) {
     VkResult res = vkQueuePresentKHR(ETNA_VEC_AT(&device->graphics_pool->queues, 0), &present_info);
     switch (res) {
         case VK_SUCCESS:
+            swapchain->frame_idx = (swapchain->frame_idx + 1) % swapchain->image_count;
             return;
         case VK_ERROR_OUT_OF_DATE_KHR:
             swapchain->recreate = true;

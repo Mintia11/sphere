@@ -26,9 +26,8 @@ void etna_vk_destroy_surface(etna_vk_surface_t* surf) {
     etna_vk_instance_t* inst = ETNA_ALLOCATION_GET_PARENT(surf, etna_vk_instance_t);
     vkDestroySurfaceKHR(inst->instance, surf->surface, VK_ALLOC(surf));
     ETNA_FREE(surf->log_scope);
-    ETNA_FREE(surf);
 
-    if (ETNA_REFCOUNT(surf) != 0) {
+    if (ETNA_FREE(surf) != 0) {
         ETNA_FATAL(NULL, "tried to free surface with %d active references\n", ETNA_REFCOUNT(surf));
         exit(1);
     }

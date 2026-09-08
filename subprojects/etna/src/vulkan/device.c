@@ -11,7 +11,6 @@ const char* vk_device_exts[] = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,
     VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME,
-    VK_KHR_INTERNALLY_SYNCHRONIZED_QUEUES_EXTENSION_NAME,
     VK_KHR_VIDEO_QUEUE_EXTENSION_NAME,
     VK_KHR_VIDEO_DECODE_QUEUE_EXTENSION_NAME,
     VK_KHR_VIDEO_DECODE_H264_EXTENSION_NAME,
@@ -176,7 +175,6 @@ etna_vk_device_t* etna_vk_create_device(etna_vk_instance_t* inst, etna_vk_surfac
         VkDeviceQueueCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
             .pNext = NULL,
-            .flags = VK_DEVICE_QUEUE_CREATE_INTERNALLY_SYNCHRONIZED_BIT_KHR,
             .queueFamilyIndex = i,
             .queueCount = queue_families[i].queueFamilyProperties.queueCount,
             .pQueuePriorities = queue_priorities,
@@ -258,9 +256,8 @@ void etna_vk_destroy_device(etna_vk_device_t* device) {
     etna_vk_destroy_cmdpool(device->decode_pool);
     vkDestroyDevice(device->device, VK_ALLOC(device));
     ETNA_FREE(device->log_scope);
-    ETNA_FREE(device);
 
-    if (ETNA_REFCOUNT(device) != 0) {
+    if (ETNA_FREE(device) != 0) {
         ETNA_FATAL(NULL, "tried to free device with %d active references\n", ETNA_REFCOUNT(device));
         exit(1);
     }

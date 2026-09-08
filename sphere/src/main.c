@@ -55,10 +55,19 @@ int main() {
         etna_vk_frame_t frame = {0};
         etna_vk_swapchain_start_frame(swapchain, &frame);
         etna_vk_cmd_begin(cmdbuf);
+        etna_vk_cmd_image_barrier(cmdbuf, &frame.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                  VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+        etna_vk_cmd_image_barrier(cmdbuf, &frame.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+        etna_vk_cmd_image_barrier(cmdbuf, &frame.image, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, 0,
+                                  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
         etna_vk_cmd_end(cmdbuf);
 
-        etna_vk_cmd_wait_binary(cmdbuf, frame.acquire_semaphore);
-        etna_vk_cmd_signal_binary(cmdbuf, frame.release_semaphore);
+        etna_vk_cmd_wait_binary(cmdbuf, frame.acquire_semaphore,
+                                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+        etna_vk_cmd_signal_binary(cmdbuf, frame.release_semaphore,
+                                  VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
         etna_vk_submit_cmdbuf(cmdbuf);
 
         etna_vk_swapchain_end_frame(swapchain);
