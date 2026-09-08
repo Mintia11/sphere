@@ -13,6 +13,8 @@ typedef struct etna_vk_cmdpool {
     VkCommandPool pool;
     ETNA_VEC(VkQueue) queues;
     ETNA_VEC(etna_vk_semaphore_t*) semaphores;
+    ETNA_VEC(etna_vk_cmdbuf_t*) inflight_cmdbufs;
+    uint64_t next_semaphore_value;
 } etna_vk_cmdpool_t;
 
 etna_vk_cmdpool_t* etna_vk_create_cmdpool(etna_vk_device_t* device, uint32_t queue_family_idx,

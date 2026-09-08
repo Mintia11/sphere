@@ -4,6 +4,7 @@
 #include "log.h"
 #include "vec.h"
 #include "image.h"
+#include "sync.h"
 
 typedef struct {
     VkSemaphore semaphore;
@@ -16,7 +17,7 @@ typedef struct {
 
     ETNA_VEC(etna_vk_cmdbuf_semaphore_t) wait_binary;
     ETNA_VEC(etna_vk_cmdbuf_semaphore_t) signal_binary;
-    uint64_t timeline_value;
+    etna_vk_semaphore_t* timeline_semaphore;
 } etna_vk_cmdbuf_t;
 
 void etna_vk_cmd_begin(etna_vk_cmdbuf_t* cmdbuf);

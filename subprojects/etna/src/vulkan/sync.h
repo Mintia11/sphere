@@ -5,7 +5,7 @@
 
 typedef struct {
     VkSemaphore semaphore;
-    uint64_t value;
+    uint64_t target_value;
 } etna_vk_semaphore_t;
 
 etna_vk_semaphore_t* etna_vk_create_semaphore(etna_vk_device_t* device, uint64_t initial_value);

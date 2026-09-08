@@ -57,6 +57,15 @@ void etna_vk_destroy_cmdpool(etna_vk_cmdpool_t* cmdpool) {
     }
     ETNA_VEC_FREE(&cmdpool->semaphores);
     ETNA_VEC_FREE(&cmdpool->queues);
+    ETNA_VEC_FOR_EACH_ENTRY(&cmdpool->inflight_cmdbufs, idx) {
+        etna_vk_cmdbuf_t* cmdbuf = ETNA_VEC_AT(&cmdpool->inflight_cmdbufs, idx);
+        etna_vk_destroy_semaphore(cmdbuf->timeline_semaphore);
+        ETNA_FREE(cmdbuf->log_scope);
+        ETNA_VEC_FREE(&cmdbuf->signal_binary);
+        ETNA_VEC_FREE(&cmdbuf->wait_binary);
+        vkFreeCommandBuffers(device->device, cmdpool->pool, 1, &cmdbuf->buf);
+        ETNA_FREE(cmdbuf);
+    }
     vkDestroyCommandPool(device->device, cmdpool->pool, VK_ALLOC(cmdpool));
 
     if (ETNA_FREE(cmdpool) != 0) {
@@ -66,7 +75,7 @@ void etna_vk_destroy_cmdpool(etna_vk_cmdpool_t* cmdpool) {
     }
 }
 
-etna_vk_cmdbuf_t* etna_vk_alloc_cmdbuffer(etna_vk_cmdpool_t* cmdpool) {
+etna_vk_cmdbuf_t* alloc_cmdbuf(etna_vk_cmdpool_t* cmdpool) {
     etna_vk_device_t* device = ETNA_ALLOCATION_GET_PARENT(cmdpool, etna_vk_device_t);
 
     VkCommandBufferAllocateInfo alloc_info = {0};
@@ -82,8 +91,27 @@ etna_vk_cmdbuf_t* etna_vk_alloc_cmdbuffer(etna_vk_cmdpool_t* cmdpool) {
     etna_vk_cmdbuf_t* cmdbuf = ETNA_ALLOC_TYPE(cmdpool, etna_vk_cmdbuf_t);
     cmdbuf->log_scope = log;
     cmdbuf->buf = out;
+    cmdbuf->timeline_semaphore = etna_vk_create_semaphore(device, 0);
 
     return cmdbuf;
+}
+
+etna_vk_cmdbuf_t* etna_vk_alloc_cmdbuffer(etna_vk_cmdpool_t* cmdpool) {
+    ETNA_VEC_FOR_EACH_ENTRY(&cmdpool->inflight_cmdbufs, idx) {
+        etna_vk_cmdbuf_t* cmdbuf = ETNA_VEC_AT(&cmdpool->inflight_cmdbufs, idx);
+
+        if (etna_vk_semaphore_get_value(cmdbuf->timeline_semaphore) >=
+            cmdbuf->timeline_semaphore->target_value) {
+            ETNA_VEC_REMOVE(&cmdpool->inflight_cmdbufs, idx);
+            VK_CHECK(cmdpool->log_scope, vkResetCommandBuffer(cmdbuf->buf, 0));
+            ETNA_VEC_FREE(&cmdbuf->signal_binary);
+            ETNA_VEC_FREE(&cmdbuf->wait_binary);
+
+            return cmdbuf;
+        }
+    }
+
+    return alloc_cmdbuf(cmdpool);
 }
 
 void etna_vk_submit_cmdbuf(etna_vk_cmdbuf_t* cmdbuf) {
@@ -121,6 +149,17 @@ void etna_vk_submit_cmdbuf(etna_vk_cmdbuf_t* cmdbuf) {
         ETNA_VEC_PUSH(&signal_infos, info);
     }
 
+    VkSemaphoreSubmitInfo timeline_info = {0};
+    timeline_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+    timeline_info.semaphore = cmdbuf->timeline_semaphore->semaphore;
+    timeline_info.deviceIndex = 1;
+    timeline_info.stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    timeline_info.value = ++cmdpool->next_semaphore_value;
+
+    cmdbuf->timeline_semaphore->target_value = timeline_info.value;
+
+    ETNA_VEC_PUSH(&signal_infos, timeline_info);
+
     VkSubmitInfo2 submit_info = {0};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
     submit_info.commandBufferInfoCount = 1;
@@ -135,13 +174,6 @@ void etna_vk_submit_cmdbuf(etna_vk_cmdbuf_t* cmdbuf) {
 
     ETNA_VEC_FREE(&signal_infos);
     ETNA_VEC_FREE(&wait_infos);
-    ETNA_VEC_FREE(&cmdbuf->signal_binary);
-    ETNA_VEC_FREE(&cmdbuf->wait_binary);
-    ETNA_FREE(cmdbuf->log_scope);
 
-    if (ETNA_FREE(cmdbuf) != 0) {
-        ETNA_FATAL(cmdpool->log_scope, "tried to free command buffer with %d active references\n",
-                   ETNA_REFCOUNT(cmdbuf));
-        exit(1);
-    }
+    ETNA_VEC_PUSH(&cmdpool->inflight_cmdbufs, cmdbuf);
 }
