@@ -55,11 +55,27 @@ int main() {
         etna_vk_frame_t frame = {0};
         etna_vk_swapchain_start_frame(swapchain, &frame);
         etna_vk_cmd_begin(cmdbuf);
-        etna_vk_cmd_image_barrier(cmdbuf, &frame.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                  VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
         etna_vk_cmd_image_barrier(cmdbuf, &frame.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                                   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                                   VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+
+        VkRenderingAttachmentInfo color = {0};
+        color.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        color.imageView = frame.image.view;
+        color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+        VkRenderingInfo info = {0};
+        info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+        info.colorAttachmentCount = 1;
+        info.pColorAttachments = &color;
+        info.renderArea.extent = frame.image.extent;
+        info.layerCount = 1;
+
+        vkCmdBeginRendering(cmdbuf->buf, &info);
+        vkCmdEndRendering(cmdbuf->buf);
+
         etna_vk_cmd_image_barrier(cmdbuf, &frame.image, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, 0,
                                   VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
         etna_vk_cmd_end(cmdbuf);
