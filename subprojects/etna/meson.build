@@ -32,6 +32,7 @@ endif
 
 etna_sources = files(
     'src/alloc.c',
+    'src/demuxers/matroska/demux.c',
     'src/log.c',
     'src/vulkan/alloc.c',
     'src/vulkan/cmd.c',

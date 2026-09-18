@@ -10,18 +10,50 @@
 #include <vulkan/swapchain.h>
 #include <vulkan/cmdpool.h>
 #include <vulkan/cmd.h>
+#include <demuxer.h>
+#include <demuxers/matroska/demux.h>
 
-int main() {
+int main(int argc, const char** argv) {
     etna_allocator_init_global();
     etna_logger_init_global();
+
+    etna_log_scope_t* main_log = etna_log_scope_new("main", NULL);
+
+    if (argc < 2) {
+        ETNA_FATAL(main_log, "USAGE:\n");
+        ETNA_FATAL(main_log, "\t%s <file to play>\n", argv[0]);
+
+        return 1;
+    }
+
+    ETNA_INFO(main_log, "playing %s\n", argv[1]);
+
+    static const etna_demuxer_def_t* demuxers[] = {&matroska_demuxer};
+    etna_demuxer_t* demuxer =
+        etna_get_demuxer(fopen(argv[1], "rb"), demuxers, sizeof(demuxers) / sizeof(demuxers[0]));
+    if (!demuxer) {
+        ETNA_FATAL(main_log, "failed to find suitable demuxer for %s\n", argv[1]);
+        return 1;
+    }
+
+    etna_packet_t packet = {0};
+    if (demuxer->read_packet(demuxer, &packet) != 0) {
+        // EOF/Error
+        return 0;
+    }
+
+    ETNA_INFO(main_log, "read packet:\n");
+    for (size_t i = 0; i < packet.data_len; i++) {
+        printf("%02x ", packet.data[i]);
+    }
+    printf("\n");
+
+    return 0;
 
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window* window =
         SDL_CreateWindow("Sphere", 1366, 768, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 
-    etna_log_scope_t* main_log = etna_log_scope_new("main", NULL);
-
-    ETNA_INFO(main_log, "Hello world!\n");
     etna_vk_instance_t* inst = etna_vk_create_instance(true);
 
     SDL_PropertiesID props = SDL_GetWindowProperties(window);
